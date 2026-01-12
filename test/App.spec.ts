@@ -94,7 +94,7 @@ describe("REST API v1", function () {
 	});
 
 	it("3c: PUT /api/v1/orgs/{org} should respond with status 422", async () => {
-		const res = await request(app).put("/api/v1/orgs/ubc");
+		const res = await request(app).put("/api/v1/orgs/ubc").send({});
 		expect(res).to.have.property("status", 422);
 		expect(res).to.have.deep.property("body", {
 			error: "Validation failed",
