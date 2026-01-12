@@ -556,7 +556,7 @@ describe("REST API v1", function () {
 			dept: "Computer Science",
 			code: "310",
 		});
-        await request(app).put("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201").send({
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201").send({
 			instructor: "holmes, reid",
 			year: 2021,
 			avg: 76.4,
