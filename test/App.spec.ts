@@ -129,6 +129,28 @@ describe("REST API v1", function () {
 		expect(res).to.have.deep.property("body", []);
 	});
 
+	it("5b1: GET /api/v1/orgs/{org}/courses should respond with status OK and body one array", async () => {
+		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		const res = await request(app).get("/api/v1/orgs/ubc/courses");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "cpsc310",
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+			links: {
+				self: "/api/v1/orgs/ubc/courses/cpsc310",
+				org: "/api/v1/orgs/ubc",
+				sections: [],
+			},
+		});
+	});
+
 	it("5b: GET /api/v1/orgs/{org}/courses should respond with status OK and body one org", async () => {
 		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
 		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
@@ -597,11 +619,6 @@ describe("REST API v1", function () {
 
 	it("11d: PUT /api/v1/orgs/{org}/courses/{course}/sections/{section} should respond with status 404: Course not found", async () => {
 		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
-		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
-			title: "Introduction to Software Engineering",
-			dept: "Computer Science",
-			code: "310",
-		});
 		const res = await request(app).put("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201").send({
 			instructor: "holmes, reid",
 			year: 2021,
@@ -760,6 +777,65 @@ describe("REST API v1", function () {
 		expect(res).to.have.deep.property("body", {
 			error: "Not found",
 			message: "no section with id '21w201'",
+		});
+	});
+
+	it("12e: DEL /api/v1/orgs/{org}/courses/{course}/sections/{section} TWICE should respond with status 404: Section not found", async () => {
+		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+
+		await request(app).del("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201");
+		const res = await request(app).del("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201");
+
+		expect(res).to.have.property("status", 404);
+		expect(res).to.have.deep.property("body", {
+			error: "Not found",
+			message: "no section with id '21w201'",
+		});
+	});
+
+	it("12f: Deleted sections are removed from course links", async () => {
+		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+
+		await request(app).del("/api/v1/orgs/ubc/courses/cpsc310/sections/21w201");
+		const res = await request(app).get("/api/v1/orgs/ubc/courses/cpsc310");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "cpsc310",
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+			links: {
+				self: "/api/v1/orgs/ubc/courses/cpsc310",
+				org: "/api/v1/orgs/ubc",
+				sections: [],
+			},
 		});
 	});
 });
