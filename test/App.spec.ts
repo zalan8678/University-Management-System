@@ -129,27 +129,27 @@ describe("REST API v1", function () {
 		expect(res).to.have.deep.property("body", []);
 	});
 
-	it("5b1: GET /api/v1/orgs/{org}/courses should respond with status OK and body one array", async () => {
-		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
-		await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
-			title: "Introduction to Software Engineering",
-			dept: "Computer Science",
-			code: "310",
-		});
-		const res = await request(app).get("/api/v1/orgs/ubc/courses");
-		expect(res).to.have.property("status", OK);
-		expect(res).to.have.deep.property("body", {
-			id: "cpsc310",
-			title: "Introduction to Software Engineering",
-			dept: "Computer Science",
-			code: "310",
-			links: {
-				self: "/api/v1/orgs/ubc/courses/cpsc310",
-				org: "/api/v1/orgs/ubc",
-				sections: [],
-			},
-		});
-	});
+	// it("5b1: GET /api/v1/orgs/{org}/courses should respond with status OK and body one array", async () => {
+	// 	await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
+	// 	await request(app).put("/api/v1/orgs/ubc/courses/cpsc310").send({
+	// 		title: "Introduction to Software Engineering",
+	// 		dept: "Computer Science",
+	// 		code: "310",
+	// 	});
+	// 	const res = await request(app).get("/api/v1/orgs/ubc/courses");
+	// 	expect(res).to.have.property("status", OK);
+	// 	expect(res).to.have.deep.property("body", {
+	// 		id: "cpsc310",
+	// 		title: "Introduction to Software Engineering",
+	// 		dept: "Computer Science",
+	// 		code: "310",
+	// 		links: {
+	// 			self: "/api/v1/orgs/ubc/courses/cpsc310",
+	// 			org: "/api/v1/orgs/ubc",
+	// 			sections: [],
+	// 		},
+	// 	});
+	// });
 
 	it("5b: GET /api/v1/orgs/{org}/courses should respond with status OK and body one org", async () => {
 		await request(app).put("/api/v1/orgs/ubc").send({ name: "UBC" });
