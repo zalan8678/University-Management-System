@@ -434,33 +434,33 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			fields.instructor = "expected a string";
 		}
 
-		if (typeof year !== "number") {
+		if (year === undefined) {
 			fields.year = "required but missing";
-		} else if (year < 1900 || year > 2099) {
+		} else if (typeof year !== "number" || year < 1900 || year > 2099) {
 			fields.year = "expected a number between 1900 and 2099";
 		}
 
-		if (typeof avg !== "number") {
+		if (avg === undefined) {
 			fields.avg = "required but missing";
-		} else if (avg < 0 || avg > 100) {
+		} else if (typeof avg !== "number" || avg < 0 || avg > 100) {
 			fields.avg = "expected a number between 0 and 100";
 		}
 
-		if (typeof pass !== "number") {
+		if (pass === undefined) {
 			fields.pass = "required but missing";
-		} else if (pass < 0) {
+		} else if (typeof pass !== "number" || pass < 0) {
 			fields.pass = "expected a number >= 0";
 		}
 
-		if (typeof fail !== "number") {
+		if (fail === undefined) {
 			fields.fail = "required but missing";
-		} else if (fail < 0) {
+		} else if (typeof fail !== "number" || fail < 0) {
 			fields.fail = "expected a number >= 0";
 		}
 
-		if (typeof audit !== "number") {
+		if (audit === undefined) {
 			fields.audit = "required but missing";
-		} else if (audit < 0) {
+		} else if (typeof audit !== "number" || audit < 0) {
 			fields.audit = "expected a number >= 0";
 		}
 
