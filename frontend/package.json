@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "demo": "cross-env DATA_DIR=frontend/demo_data yarn --cwd .. start"
+  },
+  "dependencies": {
+    "cross-env": "^10.1.0"
+  }
+}
