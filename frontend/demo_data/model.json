@@ -1,0 +1,87 @@
+{
+    "orgs": [
+      {
+        "id": "ubc",
+        "name": "University of British Columbia",
+        "courseIds": ["cpsc110", "cpsc310"]
+      },
+      {
+        "id": "sfu",
+        "name": "Simon Fraser University",
+        "courseIds": ["weeb222"]
+      },
+      {
+        "id": "NONE",
+        "name": "University of No Courses",
+        "courseIds": []
+      }
+    ],
+    "courses": [
+      {
+        "id": "cpsc110",
+        "title": "Computation, Programs, and Programming",
+        "dept": "CPSC",
+        "code": "110",
+        "orgId": "ubc",
+        "sectionIds": ["001", "201"]
+      },
+      {
+        "id": "cpsc310",
+        "title": "Intro to Software Engineering",
+        "dept": "CPSC",
+        "code": "310",
+        "orgId": "ubc",
+        "sectionIds": ["99A"]
+      },
+      {
+        "id": "weeb222",
+        "title": "Intro to Japanese Media",
+        "dept": "WEEB",
+        "code": "222",
+        "orgId": "sfu",
+        "sectionIds": ["111"]
+      }
+    ],
+    "sections": [
+      {
+        "id": "001",
+        "instructor": "Gregor Kiczales",
+        "year": 2024,
+        "avg": 78,
+        "pass": 350,
+        "fail": 40,
+        "audit": 5,
+        "courseId": "cpsc110"
+      },
+      {
+        "id": "201",
+        "instructor": "John Doe",
+        "year": 2000,
+        "avg": 12,
+        "pass": 313,
+        "fail": 232,
+        "audit": 24,
+        "courseId": "cpsc110"
+      },
+      {
+        "id": "99A",
+        "instructor": "Nick Bradley",
+        "year": 2026,
+        "avg": 99,
+        "pass": 555,
+        "fail": 32,
+        "audit": 1,
+        "courseId": "cpsc310"
+      },
+      {
+        "id": "111",
+        "instructor": "Haruto Shimpo",
+        "year": 2004,
+        "avg": 99,
+        "pass": 32,
+        "fail": 0,
+        "audit": 0,
+        "courseId": "weeb222"
+      }
+    ]
+  }
