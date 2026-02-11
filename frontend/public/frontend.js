@@ -5,7 +5,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     // --- ADD ORG BUTTON ---
     const orgAddBtn = document.createElement("button");
-    orgAddBtn.textContent = "Add / Update Organization"; 
+    orgAddBtn.textContent = "Add / Update Organization";
     orgAddBtn.style.marginLeft = "10px"; // styling
 
     orgAddBtn.onclick = async (e) => {
@@ -56,10 +56,10 @@ function createOrgNode(org) { // we're given an org
 
     // --- RENDERING ---
 
-    const detailsNode = document.createElement("details"); 
+    const detailsNode = document.createElement("details");
     const summaryNode = document.createElement("summary");
 
-    summaryNode.textContent = org.name;
+    summaryNode.textContent = `${org.name} - ${org.id}`;
     detailsNode.appendChild(summaryNode);
 
     let loaded = false; // start of ai
@@ -76,11 +76,11 @@ function createOrgNode(org) { // we're given an org
         for (const course of courses) {
             detailsNode.appendChild(createCourseNode(org.id, course));
         }
-    }); 
+    });
 
     // --- ADD COURSE BUTTON ---
     const courseAddBtn = document.createElement("button");
-    courseAddBtn.textContent = "Add / Update Course"; 
+    courseAddBtn.textContent = "Add / Update Course";
     courseAddBtn.style.marginLeft = "10px"; // styling
 
     courseAddBtn.onclick = async (e) => {
@@ -121,7 +121,7 @@ function createOrgNode(org) { // we're given an org
     // --- DELETE ORG BUTTON ---
 
     const orgDelBtn = document.createElement("button");
-    orgDelBtn.textContent = "Delete Org"; 
+    orgDelBtn.textContent = "Delete Org";
     orgDelBtn.style.marginLeft = "10px"; // styling
 
     orgDelBtn.onclick = async (e) => {
@@ -135,10 +135,10 @@ function createOrgNode(org) { // we're given an org
 }
 
 function createCourseNode(orgId, course) { // given orgid, course
-    const detailsNode = document.createElement("details"); 
+    const detailsNode = document.createElement("details");
     const summaryNode = document.createElement("summary");
 
-    summaryNode.textContent = `${course.dept} ${course.code} - ${course.title}`; // whats shown
+    summaryNode.textContent = `${course.dept} ${course.code} - ${course.title} - ${course.id}`; // whats shown
     detailsNode.appendChild(summaryNode); // appends to node
 
     let loaded = false; // start of ai
@@ -154,12 +154,12 @@ function createCourseNode(orgId, course) { // given orgid, course
         for (const section of sections) {
             detailsNode.appendChild(createSectionNode(orgId, course.id, section));
         }
-    }); 
+    });
 
 
     // --- ADD SECTION BUTTON ---
     const sectionAddBtn = document.createElement("button");
-    sectionAddBtn.textContent = "Add / Update Section"; 
+    sectionAddBtn.textContent = "Add / Update Section";
     sectionAddBtn.style.marginLeft = "10px"; // styling
 
     sectionAddBtn.onclick = async (e) => {
@@ -204,7 +204,7 @@ function createCourseNode(orgId, course) { // given orgid, course
     // --- DELETE COURSE BUTTON ---
 
     const courseDelBtn = document.createElement("button");
-    courseDelBtn.textContent = "Delete Course"; 
+    courseDelBtn.textContent = "Delete Course";
     courseDelBtn.style.marginLeft = "10px"; // styling
 
     courseDelBtn.onclick = async (e) => {
@@ -219,16 +219,16 @@ function createCourseNode(orgId, course) { // given orgid, course
 
 function createSectionNode(orgId, courseId, section) {
     const div = document.createElement("div"); // start of ai
-    div.style.marginLeft = "20px"; 
+    div.style.marginLeft = "20px";
 
     div.textContent =
-    `${section.instructor} (${section.year}) — ` +
+    `${section.instructor} (${section.year}) - ${section.id} - ` +
     `Avg: ${section.avg}, Pass: ${section.pass}, Fail: ${section.fail}, Audit: ${section.audit}`; // end of ai
 
     // --- DELETE SECTION BUTTON ---
 
     const sectionDelBtn = document.createElement("button");
-    sectionDelBtn.textContent = "Delete Section"; 
+    sectionDelBtn.textContent = "Delete Section";
     sectionDelBtn.style.marginLeft = "10px"; // styling
 
     sectionDelBtn.onclick = async (e) => {
@@ -238,6 +238,6 @@ function createSectionNode(orgId, courseId, section) {
 
     div.appendChild(sectionDelBtn); // add button
 
-    
+
     return div; // no need to append bc last one
 }
