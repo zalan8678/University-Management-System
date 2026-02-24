@@ -621,6 +621,15 @@ class Model {
 			return;
 		}
 
+		// remove sections + courses
+		const org = this.getOrgById(id);
+		const courseIds = org?.courseIds;
+		if (courseIds) {
+			for (const courseId of courseIds) {
+				await this.delCourse(courseId);
+			}
+		}
+
 		this.data.orgs.splice(orgIndex, 1);
 		await this.writeModel();
 		return;
@@ -657,6 +666,17 @@ class Model {
 		if (courseIndex == -1) {
 			return;
 		}
+    
+		// delete associated sections
+		const course = this.getCourseById(id);
+		const sectionIds = course?.sectionIds; // course cannot be undefined
+		if (sectionIds) {
+			for (const sectionId of sectionIds) {
+				await this.delSection(sectionId);
+			}
+		}
+
+		const orgid = this.getCourseById(id)?.orgId as string; // save id
 
 		this.data.courses.splice(courseIndex, 1); // delete course
 
