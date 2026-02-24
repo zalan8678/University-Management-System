@@ -1083,5 +1083,23 @@ describe("REST API v1", function () {
 			},
 		});
 	});
+	it("11: GET /api/v1/orgs/{org}/courses/{course}/sections should respond with status OK and body params and empty array", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+
+		const res = await request(app).get("/api/v1/courses/cpsc310/sections");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 0,
+			limit: 100,
+			offset: 0,
+			items: []
+		});
+	});
+
 });
 

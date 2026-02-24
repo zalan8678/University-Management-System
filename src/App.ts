@@ -324,10 +324,28 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
-
+		const limit = parseInt(req.query.limit as string) || 100;  // default 100
+		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		if (offset < 0 || limit < 0 || limit > 5000) {
+			/*let errors = [];
+			if (limit < 1 || limit > 5000) {
+				errors.push("expected an integer between 1 and 5000");
+			}
+			if (offset < 0) {
+				errors.push("expected an integer >= 0");
+			}*/
+			res.status(400).send({
+				error: "Invalid request parameters",
+				params: {limit: "expected an integer between 1 and 5000",
+						offset: "expected an integer >= 0"
+				}
+			});
+			return;
+		}
 		// get sections
 		const sections = model.getSections().filter((section) => section.courseId === req.params.courseId);
-		const body = sections.map((section) => {
+		const paginatedResults = sections.slice(offset, offset + limit);
+		const sectionResults = sections.map((section) => {
 			return {
 				id: section.id,
 				instructor: section.instructor,
@@ -342,6 +360,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				},
 			};
 		});
+		const body = {
+			total: sections.length,
+			limit: limit,
+			offset: offset,
+			items: sectionResults
+		}
 		res.status(200).send(body);
 	});
 
