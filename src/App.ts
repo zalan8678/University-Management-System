@@ -51,7 +51,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// provided example
 	// 1
-	app.get("/api/v1/orgs", (req, res) => {
+/*	app.get("/api/v1/orgs", (req, res) => {
 		const orgs = model.getOrgs();
 		const body = orgs.map((org) => {
 			return {
@@ -146,22 +146,31 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			courses: org.courseIds.map((id) => `${req.originalUrl}/courses/${id}`),
 		});
 	});
-
+*/
 	// 5
-	app.get("/api/v1/orgs/:orgId/courses", (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
+	app.get("/api/v1/courses", (req, res) => {
+		// get courses
+		const limit = parseInt(req.query.limit as string) || 100;  // default 100
+		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		if (offset < 0 || limit < 0 || limit > 5000) {
+			/*let errors = [];
+			if (limit < 1 || limit > 5000) {
+				errors.push("expected an integer between 1 and 5000");
+			}
+			if (offset < 0) {
+				errors.push("expected an integer >= 0");
+			}*/
+			res.status(400).send({
+				error: "Invalid request parameters",
+				params: {limit: "expected an integer between 1 and 5000",
+					offset: "expected an integer >= 0"
+				}
 			});
 			return;
 		}
-
-		// get courses
-		const courses = model.getCourses().filter((course) => course.orgId === req.params.orgId);
-		const body = courses.map((course) => {
+		const courses = model.getCourses();
+		const paginatedResults = courses.slice(offset, offset + limit);
+		const courseResults = paginatedResults.map((course) => {
 			return {
 				id: course.id,
 				title: course.title,
@@ -169,29 +178,26 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				code: course.code,
 				links: {
 					self: `${req.originalUrl}/${course.id}`,
-					org: `/api/v1/orgs/${req.params.orgId}`,
 					sections: course.sectionIds.map((id) => `${req.originalUrl}/${course.id}/sections/${id}`),
 				},
 			};
 		});
+		const body = {
+			total: courses.length,
+			limit: limit,
+			offset: offset,
+			items: courseResults
+		}
 		res.status(200).send(body);
 	});
 
 	// 6
-	app.get("/api/v1/orgs/:orgId/courses/:courseId", (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
+	app.get("/api/v1/courses/:courseId", (req, res) => {
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		console.log(course);
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -207,14 +213,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			code: course.code,
 			links: {
 				self: `${req.originalUrl}`,
-				org: `/api/v1/orgs/${req.params.orgId}`,
 				sections: course.sectionIds.map((id) => `${req.originalUrl}/sections/${id}`),
 			},
 		});
 	});
 
 	// 7
-	app.put("/api/v1/orgs/:orgId/courses/:courseId", async (req, res) => {
+	app.put("/api/v1/courses/:courseId", async (req, res) => {
 		const title = req.body?.title;
 		const dept = req.body?.dept;
 		const code = req.body?.code;
@@ -256,27 +261,16 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// 	return;
 		// }
 
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		const newCourse = await model.setCourse(
-			req.params.orgId,
 			req.params.courseId,
 			req.body.title,
 			req.body.dept,
 			req.body.code
 		);
 
-		if (!(course && course.orgId === req.params.orgId)) {
+		if (!(course)) {
 			// does not exist OR be part of correct parent org
 			res.status(201).send({
 				id: newCourse.id,
@@ -285,7 +279,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				code: newCourse.code,
 				links: {
 					self: req.originalUrl,
-					org: `/api/v1/orgs/${req.params.orgId}`,
 					sections: [], // can't have sections (new)
 				},
 			});
@@ -295,20 +288,11 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// 8
-	app.delete("/api/v1/orgs/:orgId/courses/:courseId", async (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
+	app.delete("/api/v1/courses/:courseId", async (req, res) => {
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -328,20 +312,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// 9
-	app.get("/api/v1/orgs/:orgId/courses/:courseId/sections", (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
+	app.get("/api/v1/courses/:courseId/sections", (req, res) => {
+
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -362,7 +338,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				audit: section.audit,
 				links: {
 					self: `${req.originalUrl}/${section.id}`,
-					course: `/api/v1/orgs/${req.params.orgId}/courses/${req.params.courseId}`,
+					course: `/api/v1/courses/${req.params.courseId}`,
 				},
 			};
 		});
@@ -371,19 +347,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// 10
 	app.get("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -418,7 +385,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// 11
-	app.put("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", async (req, res) => {
+	app.put("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
 		const instructor = req.body?.instructor;
 		const year = req.body?.year;
 		const avg = req.body?.avg;
@@ -472,19 +439,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		} // end of ai generated
 
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -516,7 +474,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				audit: newSection.audit,
 				links: {
 					self: req.originalUrl,
-					course: `/api/v1/orgs/${req.params.orgId}/courses/${req.params.courseId}`,
+					course: `/api/v1/courses/${req.params.courseId}`,
 				},
 			});
 		} else {
@@ -526,20 +484,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// 12
-	app.delete("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", async (req, res) => {
-		// get org
-		const org = model.getOrgById(req.params.orgId);
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
-
+	app.delete("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		if (!course || course.orgId != req.params.orgId) {
+		if (!course) {
 			res.status(404).send({
 				error: "Not found",
 				message: `no course with id '${req.params.courseId}'`,
@@ -574,7 +522,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 }
 
 type Data = {
-	orgs: Org[];
 	courses: Course[];
 	sections: Section[];
 };
@@ -597,13 +544,12 @@ class Model {
 			const raw = await fs.readFile(filepath, "utf-8");
 			const parsed = JSON.parse(raw) as Data; // ai generated (6 lines)
 			const data: Data = {
-				orgs: Array.isArray(parsed.orgs) ? parsed.orgs : [],
 				courses: Array.isArray(parsed.courses) ? parsed.courses : [],
 				sections: Array.isArray(parsed.sections) ? parsed.sections : [],
 			}; // end of ai generated
 			return new Model(filepath, data);
 		} catch {
-			return new Model(filepath, { orgs: [], courses: [], sections: [] }); // file does not exist, create blank file?
+			return new Model(filepath, { courses: [], sections: [] }); // file does not exist, create blank file?
 		}
 	}
 
@@ -615,7 +561,7 @@ class Model {
 
 	// --- ORG METHODS ---
 
-	public getOrgs(): Org[] {
+	/*public getOrgs(): Org[] {
 		return this.data.orgs;
 	}
 
@@ -646,7 +592,7 @@ class Model {
 		this.data.orgs.splice(orgIndex, 1);
 		await this.writeModel();
 		return;
-	}
+	}*/
 
 	// --- COURSE METHODS ---
 
@@ -658,21 +604,15 @@ class Model {
 		return this.data.courses.find((course) => course.id === id);
 	}
 
-	public async setCourse(orgId: string, id: string, title: string, dept: string, code: string): Promise<Course> {
+	public async setCourse(id: string, title: string, dept: string, code: string): Promise<Course> {
 		let course = this.getCourseById(id);
 		if (course) {
 			course.title = title;
 			course.dept = dept;
 			course.code = code;
-			course.orgId = orgId;
 		} else {
-			course = { id, title, dept, code, orgId, sectionIds: [] };
+			course = { id, title, dept, code, sectionIds: [] };
 			this.data.courses.push(course);
-
-			const org = this.getOrgById(orgId);
-			if (org && !org.courseIds.includes(id)) {
-				org.courseIds.push(id);
-			}
 		}
 		await this.writeModel();
 		return course;
@@ -686,18 +626,7 @@ class Model {
 			return;
 		}
 
-		const orgid = this.getCourseById(id)?.orgId as string; // save id
-
 		this.data.courses.splice(courseIndex, 1); // delete course
-
-		// delete from parent
-		const org = this.getOrgById(orgid);
-		if (org && org.courseIds.includes(id)) {
-			const parentIndex = org.courseIds.findIndex((courseId) => courseId === id);
-			if (parentIndex !== -1) {
-				org.courseIds.splice(parentIndex, 1);
-			}
-		}
 
 		await this.writeModel();
 		return;
@@ -772,18 +701,17 @@ class Model {
 	}
 }
 
-export interface Org {
+/*export interface Org {
 	id: string;
 	name: string;
 	courseIds: string[];
-}
+}*/
 
 export interface Course {
 	id: string;
 	title: string;
 	dept: string;
 	code: string;
-	orgId: string;
 	sectionIds: string[];
 }
 
