@@ -911,7 +911,7 @@ describe("REST API v1", function () {
 			code: "310",
 			links: {
 				self: "/api/v1/courses/cpsc310",
-				sections: [],
+				sections: `/api/v1/courses/cpsc310/sections`,
 			},
 		});
 	});
@@ -945,7 +945,7 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("9: DEL /api/v1/orgs/{org}/courses/{course} should respond with status 200 and body org data", async () => {
+	it("9: DEL /api/v1/courses/{course} should respond with status 200 and body org data", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
@@ -959,7 +959,7 @@ describe("REST API v1", function () {
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
 			code: "310",
-			sections: [],
+			sections: 0,
 		});
 	});
 

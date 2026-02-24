@@ -160,11 +160,19 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			if (offset < 0) {
 				errors.push("expected an integer >= 0");
 			}*/
+			// Genereated by AI
+			let params: Record<string, string> = {};
+
+			if (limit < 1 || limit > 5000) {
+  				params.limit = "expected an integer between 1 and 5000";
+			}
+			if (offset < 0) {
+  				params.offset = "expected an integer >= 0";
+			}
+			// End of AI code
 			res.status(400).send({
 				error: "Invalid request parameters",
-				params: {limit: "expected an integer between 1 and 5000",
-					offset: "expected an integer >= 0"
-				}
+				params
 			});
 			return;
 		}
@@ -279,7 +287,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				code: newCourse.code,
 				links: {
 					self: req.originalUrl,
-					sections: [], // can't have sections (new)
+					sections: `/api/v1/courses/${req.params.courseId}/sections`
 				},
 			});
 		} else {
@@ -307,7 +315,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			title: course.title,
 			dept: course.dept,
 			code: course.code,
-			sections: course.sectionIds.map((id) => `${req.originalUrl}/sections/${id}`),
+			sections: course.sectionIds.length
 		});
 	});
 
