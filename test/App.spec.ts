@@ -422,7 +422,7 @@ describe("REST API v1", function () {
 	});
 
 	it("13c: GET /api/v1/datasets/{id} should respond with status 200: Failed - Invalid ZIP", async () => {
-		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "txtfile.zip"));
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "txtfile.txt"));
 		const uploadRes = await request(app)
 			.post("/api/v1/datasets")
 			.field("kind", "course_offerings")

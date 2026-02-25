@@ -26,6 +26,11 @@ export type AppConfig = {
  */
 export async function createApp(config: AppConfig): Promise<Application> {
 	const app = express();
+	const multer = require("multer");
+	const JSZip = require("jszip");
+	const upload = multer({ storage: multer.memoryStorage() });
+	let idCounter = 1;
+	const datasets = new Map<string, Dataset>(); // where string is the DatasetID
 
 	const { datadir } = config;
 
@@ -49,19 +54,371 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		res.send("App is running!");
 	});
 
+	// test series 12
+	app.post("/api/v1/datasets", upload.single("archive"), async (req, res) => {
+		// REQUEST VALIDATION
+		const kind = req.body?.kind;
+		const archive = req.file;
+
+		const fields: Record<string, string> = {}; // format is ai generated (and modified)
+
+		if (kind === undefined) {
+			fields.kind = "required but missing";
+		} else if (kind !== "course_offerings") {
+			fields.kind = "expected to be course_offerings";
+		}
+
+		if (archive === undefined) {
+			fields.archive = "required but missing";
+		} else if (archive.buffer.length === 0 || !archive.buffer) {
+			fields.archive = "expected non-empty file";
+		}
+
+		if (Object.keys(fields).length > 0) {
+			res.status(422).send({
+				error: "Validation failed",
+				fields,
+			});
+			return;
+		} // end of ai generated
+
+		// DATASET CREATION
+
+		const id = `upload_${idCounter++}`; // incs idcounter after
+
+		const data: Dataset = {
+			// this line is ai gen'd
+			id,
+			kind,
+			status: "processing",
+			stats: {
+				files_total: 0,
+				files_processed: 0,
+				files_skipped: 0,
+				courses_seen: 0,
+				courses_added: 0,
+				courses_modified: 0,
+				sections_seen: 0,
+				sections_added: 0,
+				sections_modified: 0,
+			},
+			message: "Processing in progress",
+		};
+
+		datasets.set(id, data);
+
+		// PROCESS DATASET
+
+		if (archive) {
+			processDataset(id, archive.buffer);
+		}
+
+		// TEMP STATUS: PROCESSING
+
+		res.status(202).send({
+			id: id,
+			status: "processing",
+			kind: "course_offerings",
+			message: "Dataset accepted for processing",
+		});
+		return;
+	});
+
+	async function processDataset(id: string, buffer: Buffer) {
+		let dataset = datasets.get(id);
+		if (!dataset) {
+			return;
+		}
+
+		const latestYearForCourse = new Map<string, number>(); // this line is ai gen
+
+		// VALIDATION
+
+		let zip;
+		try {
+			zip = await JSZip.loadAsync(buffer);
+		} catch (err) {
+			dataset.status = "failed";
+			dataset.message = "Data is not in a valid zip format";
+			return;
+		}
+
+		// CONTENT PROCESSING
+
+		const files = Object.values(zip.files).filter(
+			// start of ai gen
+			(file: any) => !file.dir && file.name.startsWith("courses/") && file.name.endsWith(".json")
+		) as any[]; // end of ai gen
+
+		if (files.length === 0) {
+			// length = 0 means no files in courses/
+			dataset.status = "failed";
+			dataset.message = "Missing root courses directory";
+			return;
+		}
+
+		dataset.stats.files_total = files.length;
+
+		for (const file of files) {
+			const content = await file.async("string"); // reads as string
+
+			let sections; // every "result" is a unique section (result is an array of sections)
+			try {
+				const parsed = JSON.parse(content); // parses
+				if (!Array.isArray(parsed.result)) throw new Error(); // this line is ai generated
+				sections = parsed.result;
+				dataset.stats.files_processed++;
+			} catch {
+				dataset.stats.files_skipped++;
+				continue;
+			}
+
+			for (const section of sections) {
+				// PROCESS COURSES
+				const courseID = `${section.Subject}${section.Course}`;
+
+				dataset.stats.courses_seen++;
+				try {
+					validateCourseInput(
+						courseID, // id
+						section.Title, // title
+						section.Subject, // dept
+						section.Course // code
+					);
+
+					const currCourse = model.getCourseById(courseID);
+
+					if (!currCourse) {
+						// course does not exist - ADD
+						await model.setCourse(
+							courseID, // id
+							section.Title, // title TODO: MAKE MOST RECENT
+							section.Subject, // dept
+							section.Course // code
+						);
+						dataset.stats.courses_added++;
+					} else if (
+						currCourse.title !== section.Title || // course already exists - UPDATE
+						currCourse.dept !== section.Subject ||
+						currCourse.code !== section.Course
+					) {
+						let thisYear;
+						if (section.Section === "overall") {
+							thisYear = 1900;
+						} else {
+							thisYear = Number(section.Year);
+						}
+
+						let prevUploadYear = latestYearForCourse.get(courseID);
+						if (prevUploadYear === undefined) {
+							prevUploadYear = -Infinity;
+						}
+
+						let existingYear = getLatestYearforCourse(courseID);
+
+						let newestKnownYear = prevUploadYear;
+						if (existingYear > newestKnownYear) {
+							newestKnownYear = existingYear;
+						}
+
+						if (thisYear > newestKnownYear) {
+							latestYearForCourse.set(courseID, thisYear);
+							await model.setCourse(
+								courseID, // id
+								section.Title, // OVERRIDE TITLE (THIS YEAR IS MORE RECENT)
+								section.Subject, // dept
+								section.Course // code
+							);
+						} else {
+							await model.setCourse(
+								courseID, // id
+								currCourse.title, // OLD TITLE
+								section.Subject, // dept
+								section.Course // code
+							);
+						}
+
+						dataset.stats.courses_modified++;
+					} // ELSE: course exists and is updated - NO CHANGE
+				} catch (err) {
+					// if input invalid, goes to next file
+					continue;
+				}
+
+				// PROCESS SECTIONS
+				dataset.stats.sections_seen++;
+				try {
+					const currSection = await model.getSectionById(section.id);
+
+					let actualYear;
+					if (section.Section === "overall") {
+						actualYear = 1900;
+					} else {
+						actualYear = Number(section.Year);
+					}
+
+					validateSectionInput(
+						courseID, // courseid
+						String(section.id), // id
+						section.Professor, // instructor
+						Number(actualYear), // year
+						Number(section.Avg), // avg
+						Number(section.Pass), // pass
+						Number(section.Fail), // fail
+						Number(section.Audit) // audit
+					);
+
+					if (!currSection) {
+						// section does not exist - ADD
+						await model.setSection(
+							courseID, // courseid
+							String(section.id), // id
+							section.Professor, // instructor
+							Number(actualYear), // year
+							Number(section.Avg), // avg
+							Number(section.Pass), // pass
+							Number(section.Fail), // fail
+							Number(section.Audit) // audit
+						);
+						dataset.stats.sections_added++;
+					} else if (
+						// section already exists - UPDATE
+						currSection.instructor !== section.Professor ||
+						currSection.year !== actualYear ||
+						currSection.avg !== Number(section.Avg) ||
+						currSection.pass !== Number(section.Pass) ||
+						currSection.fail !== Number(section.Fail) ||
+						currSection.audit !== Number(section.Audit)
+					) {
+						await model.setSection(
+							courseID, // courseid
+							String(section.id), // id
+							section.Professor, // instructor
+							actualYear, // year
+							Number(section.Avg), // avg
+							Number(section.Pass), // pass
+							Number(section.Fail), // fail
+							Number(section.Audit) // audit
+						);
+						dataset.stats.sections_modified++;
+					} // ELSE: section exists and is updated - NO CHANGE
+				} catch (err) {
+					continue;
+				}
+			}
+		}
+
+		dataset.status = "completed";
+		dataset.message = "Dataset processing complete";
+	}
+
+	// -- HELPER FUNCTIONS FOR POST DATASETS --
+
+	function getLatestYearforCourse(courseId: string): number {
+		const sections = model.getSections().filter((section) => section.courseId === courseId); // this line is ai generated
+
+		if (sections.length === 0) return -Infinity;
+
+		let maxYear = 0;
+
+		for (const section of sections) {
+			if (section.year > maxYear) {
+				maxYear = section.year;
+			}
+		}
+
+		return maxYear;
+	}
+
+	function validateCourseInput(id: string, title: string, dept: string, code: string) {
+		if (title === undefined) {
+			throw new Error();
+		} else if (typeof title !== "string") {
+			throw new Error();
+		}
+
+		if (dept === undefined) {
+			throw new Error();
+		} else if (typeof dept !== "string") {
+			throw new Error();
+		}
+		if (code === undefined) {
+			throw new Error();
+		} else if (typeof code !== "string") {
+			throw new Error();
+		}
+	}
+
+	function validateSectionInput(
+		courseId: string,
+		id: string,
+		instructor: string,
+		year: number,
+		avg: number,
+		pass: number,
+		fail: number,
+		audit: number
+	) {
+		if (instructor === undefined) {
+			throw new Error();
+		} else if (typeof instructor !== "string") {
+			throw new Error();
+		}
+
+		if (year === undefined) {
+			throw new Error();
+		} else if (typeof year !== "number" || year < 1900 || year > 2099) {
+			throw new Error();
+		}
+
+		if (avg === undefined) {
+			throw new Error();
+		} else if (typeof avg !== "number" || avg < 0 || avg > 100) {
+			throw new Error();
+		}
+
+		if (pass === undefined) {
+			throw new Error();
+		} else if (typeof pass !== "number" || pass < 0) {
+			throw new Error();
+		}
+
+		if (fail === undefined) {
+			throw new Error();
+		} else if (typeof fail !== "number" || fail < 0) {
+			throw new Error();
+		}
+
+		if (audit === undefined) {
+			throw new Error();
+		} else if (typeof audit !== "number" || audit < 0) {
+			throw new Error();
+		}
+	}
+
+	// -- END HELPER FUNCTIONS FOR POST DATASET --
+	// test series 13
+	app.get("/api/v1/datasets/:id", (req, res) => {
+		const dataset = datasets.get(req.params.id);
+
+		if (!dataset) {
+			// validation
+			res.status(404).send({
+				error: "Not found",
+				message: `no dataset with id '${req.params.id}'`,
+			});
+			return;
+		}
+
+		res.status(200).send(dataset); // else: send result
+	});
+
 	// 5
 	app.get("/api/v1/courses", (req, res) => {
 		// get courses
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
-			/*let errors = [];
-			if (limit < 1 || limit > 5000) {
-				errors.push("expected an integer between 1 and 5000");
-			}
-			if (offset < 0) {
-				errors.push("expected an integer >= 0");
-			}*/
 			// Genereated by AI
 			let params: Record<string, string> = {};
 
@@ -218,13 +575,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
-			/*let errors = [];
-			if (limit < 1 || limit > 5000) {
-				errors.push("expected an integer between 1 and 5000");
-			}
-			if (offset < 0) {
-				errors.push("expected an integer >= 0");
-			}*/
 			res.status(400).send({
 				error: "Invalid request parameters",
 				params: { limit: "expected an integer between 1 and 5000", offset: "expected an integer >= 0" },
@@ -603,4 +953,22 @@ export interface Section {
 	fail: number;
 	audit: number;
 	courseId: string;
+}
+
+export interface Dataset {
+	id: string;
+	status: "processing" | "completed" | "failed";
+	kind: string;
+	stats: {
+		files_total: number;
+		files_processed: number;
+		files_skipped: number;
+		courses_seen: number;
+		courses_added: number;
+		courses_modified: number;
+		sections_seen: number;
+		sections_added: number;
+		sections_modified: number;
+	};
+	message: string;
 }
