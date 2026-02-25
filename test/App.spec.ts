@@ -495,9 +495,9 @@ describe("REST API v1", function () {
 		expect(getRes).to.have.deep.property("body", {
 			error: "Not found",
 			message: "no dataset with id 'upload_2'",
-    });
-  });
-  
+		});
+	});
+
 	it("15: GET /api/v1/courses should respond with status OK and body empty array and descriptors for given properties", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
