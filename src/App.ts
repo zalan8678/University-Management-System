@@ -248,7 +248,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				// PROCESS SECTIONS
 				dataset.stats.sections_seen++;
 				try {
-					const currSection = await model.getSectionById(section.id);
+					const currSection = await model.getSectionById(section.id, courseID);
 
 					let actualYear;
 					if (section.Section === "overall") {
@@ -631,7 +631,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 
 		// get section
-		const section = model.getSectionById(req.params.sectionId);
+		const section = model.getSectionById(req.params.sectionId, req.params.courseId);
 		if (!section || section.courseId != req.params.courseId) {
 			res.status(404).send({
 				error: "Not found",
@@ -721,7 +721,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		}
 
-		const section = model.getSectionById(req.params.sectionId);
+		const section = model.getSectionById(req.params.sectionId, req.params.courseId);
 		const newSection = await model.setSection(
 			req.params.courseId,
 			req.params.sectionId,
@@ -767,7 +767,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 
 		// get section
-		const section = model.getSectionById(req.params.sectionId);
+		const section = model.getSectionById(req.params.sectionId, req.params.courseId);
 		if (!section || section.courseId != req.params.courseId) {
 			res.status(404).send({
 				error: "Not found",
@@ -777,7 +777,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 
 		// delete
-		await model.delSection(req.params.sectionId); // also handles parents
+		await model.delSection(req.params.sectionId, req.params.courseId); // also handles parents
 		res.status(200).send({
 			id: section.id,
 			instructor: section.instructor,
@@ -867,7 +867,7 @@ class Model {
 		const sectionIds = course?.sectionIds; // course cannot be undefined
 		if (sectionIds) {
 			for (const sectionId of sectionIds) {
-				await this.delSection(sectionId);
+				await this.delSection(sectionId, course.id);
 			}
 		}
 
@@ -883,8 +883,8 @@ class Model {
 		return this.data.sections;
 	}
 
-	public getSectionById(id: string): Section | undefined {
-		return this.data.sections.find((section) => section.id === id);
+	public getSectionById(id: string, courseId: string): Section | undefined {
+		return this.data.sections.find((section) => section.id === id && section.courseId === courseId);
 	}
 
 	public async setSection(
@@ -897,7 +897,7 @@ class Model {
 		fail: number,
 		audit: number
 	): Promise<Section> {
-		let section = this.getSectionById(id);
+		let section = this.getSectionById(id, courseId);
 		if (section) {
 			// overwrite
 			section.instructor = instructor;
@@ -920,20 +920,17 @@ class Model {
 		return section;
 	}
 
-	public async delSection(id: string): Promise<void> {
-		// assumes org exists
+	public async delSection(id: string, courseID: string): Promise<void> {
 		const sectionIndex = this.data.sections.findIndex((section) => section.id === id);
 
 		if (sectionIndex == -1) {
 			return;
 		}
 
-		const courseid = this.getSectionById(id)?.courseId as string; // save id, prevent undefined
-
 		this.data.sections.splice(sectionIndex, 1); // delete section
 
 		// delete from parent
-		const course = this.getCourseById(courseid);
+		const course = this.getCourseById(courseID);
 		if (course && course.sectionIds.includes(id)) {
 			const parentIndex = course.sectionIds.findIndex((sectionId) => sectionId === id);
 			if (parentIndex !== -1) {
