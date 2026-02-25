@@ -840,7 +840,7 @@ describe("REST API v1", function () {
 			total: 0,
 			limit: 100,
 			offset: 0,
-			items: []
+			items: [],
 		});
 	});
 	it("3: GET /api/v1/courses should respond with status OK and body empty array and descriptors for given properties", async () => {
@@ -851,7 +851,7 @@ describe("REST API v1", function () {
 			total: 0,
 			limit: 123,
 			offset: 200,
-			items: []
+			items: [],
 		});
 	});
 	it("4: GET /api/v1/courses/{course} should respond with status 404", async () => {
@@ -869,9 +869,9 @@ describe("REST API v1", function () {
 		expect(res).to.have.deep.property("body", {
 			error: "Invalid request parameters",
 			params: {
-				"limit": "expected an integer between 1 and 5000",
-				"offset": "expected an integer >= 0"
-			}
+				limit: "expected an integer between 1 and 5000",
+				offset: "expected an integer >= 0",
+			},
 		});
 	});
 	it("6: PUT /api/v1/courses/{course} should respond with status CREATED and body course data", async () => {
@@ -1075,9 +1075,7 @@ describe("REST API v1", function () {
 			total: 0,
 			limit: 100,
 			offset: 0,
-			items: []
+			items: [],
 		});
 	});
-
 });
-

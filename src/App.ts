@@ -51,7 +51,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// provided example
 	// 1
-/*	app.get("/api/v1/orgs", (req, res) => {
+	/*	app.get("/api/v1/orgs", (req, res) => {
 		const orgs = model.getOrgs();
 		const body = orgs.map((org) => {
 			return {
@@ -150,8 +150,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 5
 	app.get("/api/v1/courses", (req, res) => {
 		// get courses
-		const limit = parseInt(req.query.limit as string) || 100;  // default 100
-		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		const limit = parseInt(req.query.limit as string) || 100; // default 100
+		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
 			/*let errors = [];
 			if (limit < 1 || limit > 5000) {
@@ -164,15 +164,15 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			let params: Record<string, string> = {};
 
 			if (limit < 1 || limit > 5000) {
-  				params.limit = "expected an integer between 1 and 5000";
+				params.limit = "expected an integer between 1 and 5000";
 			}
 			if (offset < 0) {
-  				params.offset = "expected an integer >= 0";
+				params.offset = "expected an integer >= 0";
 			}
 			// End of AI code
 			res.status(400).send({
 				error: "Invalid request parameters",
-				params
+				params,
 			});
 			return;
 		}
@@ -194,14 +194,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			total: courses.length,
 			limit: limit,
 			offset: offset,
-			items: courseResults
-		}
+			items: courseResults,
+		};
 		res.status(200).send(body);
 	});
 
 	// 6
 	app.get("/api/v1/courses/:courseId", (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		console.log(course);
@@ -271,14 +270,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		const newCourse = await model.setCourse(
-			req.params.courseId,
-			req.body.title,
-			req.body.dept,
-			req.body.code
-		);
+		const newCourse = await model.setCourse(req.params.courseId, req.body.title, req.body.dept, req.body.code);
 
-		if (!(course)) {
+		if (!course) {
 			// does not exist OR be part of correct parent org
 			res.status(201).send({
 				id: newCourse.id,
@@ -287,7 +281,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				code: newCourse.code,
 				links: {
 					self: req.originalUrl,
-					sections: `/api/v1/courses/${req.params.courseId}/sections`
+					sections: `/api/v1/courses/${req.params.courseId}/sections`,
 				},
 			});
 		} else {
@@ -297,7 +291,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// 8
 	app.delete("/api/v1/courses/:courseId", async (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -315,14 +308,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			title: course.title,
 			dept: course.dept,
 			code: course.code,
-			sections: course.sectionIds.length
+			sections: course.sectionIds.length,
 		});
 	});
 
 	// 9
 	app.get("/api/v1/courses/:courseId/sections", (req, res) => {
-
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -332,8 +323,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
-		const limit = parseInt(req.query.limit as string) || 100;  // default 100
-		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		const limit = parseInt(req.query.limit as string) || 100; // default 100
+		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
 			/*let errors = [];
 			if (limit < 1 || limit > 5000) {
@@ -344,9 +335,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			}*/
 			res.status(400).send({
 				error: "Invalid request parameters",
-				params: {limit: "expected an integer between 1 and 5000",
-						offset: "expected an integer >= 0"
-				}
+				params: { limit: "expected an integer between 1 and 5000", offset: "expected an integer >= 0" },
 			});
 			return;
 		}
@@ -372,14 +361,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			total: sections.length,
 			limit: limit,
 			offset: offset,
-			items: sectionResults
-		}
+			items: sectionResults,
+		};
 		res.status(200).send(body);
 	});
 
 	// 10
 	app.get("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -470,7 +458,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		} // end of ai generated
-
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
@@ -666,7 +653,7 @@ class Model {
 		if (courseIndex == -1) {
 			return;
 		}
-    
+
 		// delete associated sections
 		const course = this.getCourseById(id);
 		const sectionIds = course?.sectionIds; // course cannot be undefined
@@ -676,7 +663,7 @@ class Model {
 			}
 		}
 
-		const orgid = this.getCourseById(id)?.orgId as string; // save id
+		// const orgid = this.getCourseById(id)?.orgId as string; // save id
 
 		this.data.courses.splice(courseIndex, 1); // delete course
 
