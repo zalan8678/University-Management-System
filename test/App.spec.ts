@@ -589,4 +589,70 @@ describe("REST API v1", function () {
 			],
 		});
 	});
+	it("18: GET /api/v1/courses/cpsc310/sections/21w201 should respond with status OK and body 1 course and descriptors for given properties", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await request(app).put("/api/v1/courses/cpsc310/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/cpsc310/sections/21w202").send({
+			instructor: "hinojosa, efrain",
+			year: 2021,
+			avg: 69,
+			pass: 67,
+			fail: 10,
+			audit: 2,
+		});
+		await request(app).put("/api/v1/courses/weeb123/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/weeb123/sections/21w202").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		const res = await request(app).get("/api/v1/courses/cpsc310/sections?limit=1&offset=1");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 2,
+			limit: 1,
+			offset: 1,
+			items: [
+				{
+					id: "21w202",
+					instructor: "hinojosa, efrain",
+					year: 2021,
+					avg: 69,
+					pass: 67,
+					fail: 10,
+					audit: 2,
+					links: {
+						self: "/api/v1/courses/cpsc310/sections/21w202",
+						course: "/api/v1/courses/cpsc310",
+					},
+				},
+			],
+		});
+	});
 });
