@@ -49,104 +49,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		res.send("App is running!");
 	});
 
-	// provided example
-	// 1
-	/*	app.get("/api/v1/orgs", (req, res) => {
-		const orgs = model.getOrgs();
-		const body = orgs.map((org) => {
-			return {
-				id: org.id,
-				name: org.name,
-				links: {
-					self: `${req.originalUrl}/${org.id}`,
-					courses: org.courseIds.map((id) => `${req.originalUrl}/${org.id}/courses/${id}`),
-				},
-			};
-		});
-		res.status(200).send(body);
-	});
-
-	// 2
-	app.get("/api/v1/orgs/:orgId", (req, res) => {
-		const org = model.getOrgById(req.params.orgId);
-
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		} else {
-			res.status(200).send({
-				id: org.id,
-				name: org.name,
-				links: {
-					self: `${req.originalUrl}`,
-					courses: org.courseIds.map((id) => `${req.originalUrl}/${org.id}/courses/${id}`),
-				},
-			});
-		}
-	});
-
-	// provided example
-	// 3
-	app.put("/api/v1/orgs/:orgId", async (req, res) => {
-		const name = req.body?.name;
-		if (name === undefined) {
-			res.status(422).send({
-				error: "Validation failed",
-				fields: {
-					name: "required but missing",
-				},
-			});
-			return;
-		} else if (typeof name !== "string") {
-			res.status(422).send({
-				error: "Validation failed",
-				fields: {
-					name: "expected a string",
-				},
-			});
-			return;
-		}
-
-		const org = model.getOrgById(req.params.orgId);
-		const newOrg = await model.setOrg(req.params.orgId, req.body.name);
-
-		if (!org) {
-			res.status(201).send({
-				id: newOrg.id,
-				name: newOrg.name,
-				links: {
-					self: req.originalUrl,
-					courses: [], // can't have courses (its new)
-				},
-			});
-		} else {
-			res.sendStatus(204); // overwrite
-		}
-	});
-
-	// 4
-	app.delete("/api/v1/orgs/:orgId", async (req, res) => {
-		const org = model.getOrgById(req.params.orgId);
-
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
-
-		await model.delOrg(req.params.orgId);
-		res.status(200).send({
-			id: org.id,
-			name: org.name,
-			courses: org.courseIds.map((id) => `${req.originalUrl}/courses/${id}`),
-		});
-	});
-*/
 	// 5
 	app.get("/api/v1/courses", (req, res) => {
 		// get courses
@@ -257,16 +159,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		} // end of ai generated
-
-		// if (typeof title !== "string" || typeof dept !== "string" || typeof code !== "string") {
-		// 	res.status(422).send({
-		// 		error: "Validation failed",
-		// 		fields: {
-		// 			name: "required but missing",
-		// 		},
-		// 	});
-		// 	return;
-		// }
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
@@ -578,50 +470,6 @@ class Model {
 		await fs.writeFile(this.filepath, JSON.stringify(this.data, null, 2), "utf-8");
 	}
 
-	// --- ORG METHODS ---
-
-	/*public getOrgs(): Org[] {
-		return this.data.orgs;
-	}
-
-	public getOrgById(id: string): Org | undefined {
-		return this.data.orgs.find((org) => org.id === id);
-	}
-
-	public async setOrg(id: string, name: string): Promise<Org> {
-		let org = this.getOrgById(id);
-		if (org) {
-			org.name = name;
-		} else {
-			org = { id, name, courseIds: [] };
-			this.data.orgs.push(org);
-		}
-		await this.writeModel();
-		return org;
-	}
-
-	public async delOrg(id: string): Promise<void> {
-		// assumes org exists
-		const orgIndex = this.data.orgs.findIndex((org) => org.id === id);
-
-		if (orgIndex == -1) {
-			return;
-		}
-
-		// remove sections + courses
-		const org = this.getOrgById(id);
-		const courseIds = org?.courseIds;
-		if (courseIds) {
-			for (const courseId of courseIds) {
-				await this.delCourse(courseId);
-			}
-		}
-
-		this.data.orgs.splice(orgIndex, 1);
-		await this.writeModel();
-		return;
-	}*/
-
 	// --- COURSE METHODS ---
 
 	public getCourses(): Course[] {
@@ -662,8 +510,6 @@ class Model {
 				await this.delSection(sectionId);
 			}
 		}
-
-		// const orgid = this.getCourseById(id)?.orgId as string; // save id
 
 		this.data.courses.splice(courseIndex, 1); // delete course
 
@@ -739,12 +585,6 @@ class Model {
 		return;
 	}
 }
-
-/*export interface Org {
-	id: string;
-	name: string;
-	courseIds: string[];
-}*/
 
 export interface Course {
 	id: string;
