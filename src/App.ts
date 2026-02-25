@@ -49,109 +49,11 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		res.send("App is running!");
 	});
 
-	// provided example
-	// 1
-/*	app.get("/api/v1/orgs", (req, res) => {
-		const orgs = model.getOrgs();
-		const body = orgs.map((org) => {
-			return {
-				id: org.id,
-				name: org.name,
-				links: {
-					self: `${req.originalUrl}/${org.id}`,
-					courses: org.courseIds.map((id) => `${req.originalUrl}/${org.id}/courses/${id}`),
-				},
-			};
-		});
-		res.status(200).send(body);
-	});
-
-	// 2
-	app.get("/api/v1/orgs/:orgId", (req, res) => {
-		const org = model.getOrgById(req.params.orgId);
-
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		} else {
-			res.status(200).send({
-				id: org.id,
-				name: org.name,
-				links: {
-					self: `${req.originalUrl}`,
-					courses: org.courseIds.map((id) => `${req.originalUrl}/${org.id}/courses/${id}`),
-				},
-			});
-		}
-	});
-
-	// provided example
-	// 3
-	app.put("/api/v1/orgs/:orgId", async (req, res) => {
-		const name = req.body?.name;
-		if (name === undefined) {
-			res.status(422).send({
-				error: "Validation failed",
-				fields: {
-					name: "required but missing",
-				},
-			});
-			return;
-		} else if (typeof name !== "string") {
-			res.status(422).send({
-				error: "Validation failed",
-				fields: {
-					name: "expected a string",
-				},
-			});
-			return;
-		}
-
-		const org = model.getOrgById(req.params.orgId);
-		const newOrg = await model.setOrg(req.params.orgId, req.body.name);
-
-		if (!org) {
-			res.status(201).send({
-				id: newOrg.id,
-				name: newOrg.name,
-				links: {
-					self: req.originalUrl,
-					courses: [], // can't have courses (its new)
-				},
-			});
-		} else {
-			res.sendStatus(204); // overwrite
-		}
-	});
-
-	// 4
-	app.delete("/api/v1/orgs/:orgId", async (req, res) => {
-		const org = model.getOrgById(req.params.orgId);
-
-		if (!org) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no org with id '${req.params.orgId}'`,
-			});
-			return;
-		}
-
-		await model.delOrg(req.params.orgId);
-		res.status(200).send({
-			id: org.id,
-			name: org.name,
-			courses: org.courseIds.map((id) => `${req.originalUrl}/courses/${id}`),
-		});
-	});
-*/
 	// 5
 	app.get("/api/v1/courses", (req, res) => {
 		// get courses
-		const limit = parseInt(req.query.limit as string) || 100;  // default 100
-		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		const limit = parseInt(req.query.limit as string) || 100; // default 100
+		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
 			/*let errors = [];
 			if (limit < 1 || limit > 5000) {
@@ -164,15 +66,15 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			let params: Record<string, string> = {};
 
 			if (limit < 1 || limit > 5000) {
-  				params.limit = "expected an integer between 1 and 5000";
+				params.limit = "expected an integer between 1 and 5000";
 			}
 			if (offset < 0) {
-  				params.offset = "expected an integer >= 0";
+				params.offset = "expected an integer >= 0";
 			}
 			// End of AI code
 			res.status(400).send({
 				error: "Invalid request parameters",
-				params
+				params,
 			});
 			return;
 		}
@@ -194,14 +96,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			total: courses.length,
 			limit: limit,
 			offset: offset,
-			items: courseResults
-		}
+			items: courseResults,
+		};
 		res.status(200).send(body);
 	});
 
 	// 6
 	app.get("/api/v1/courses/:courseId", (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		console.log(course);
@@ -259,26 +160,11 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		} // end of ai generated
 
-		// if (typeof title !== "string" || typeof dept !== "string" || typeof code !== "string") {
-		// 	res.status(422).send({
-		// 		error: "Validation failed",
-		// 		fields: {
-		// 			name: "required but missing",
-		// 		},
-		// 	});
-		// 	return;
-		// }
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		const newCourse = await model.setCourse(
-			req.params.courseId,
-			req.body.title,
-			req.body.dept,
-			req.body.code
-		);
+		const newCourse = await model.setCourse(req.params.courseId, req.body.title, req.body.dept, req.body.code);
 
-		if (!(course)) {
+		if (!course) {
 			// does not exist OR be part of correct parent org
 			res.status(201).send({
 				id: newCourse.id,
@@ -287,7 +173,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				code: newCourse.code,
 				links: {
 					self: req.originalUrl,
-					sections: `/api/v1/courses/${req.params.courseId}/sections`
+					sections: `/api/v1/courses/${req.params.courseId}/sections`,
 				},
 			});
 		} else {
@@ -297,7 +183,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// 8
 	app.delete("/api/v1/courses/:courseId", async (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -315,14 +200,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			title: course.title,
 			dept: course.dept,
 			code: course.code,
-			sections: course.sectionIds.length
+			sections: course.sectionIds.length,
 		});
 	});
 
 	// 9
 	app.get("/api/v1/courses/:courseId/sections", (req, res) => {
-
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -332,8 +215,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
-		const limit = parseInt(req.query.limit as string) || 100;  // default 100
-		const offset = parseInt(req.query.offset as string) || 0;  // default 0
+		const limit = parseInt(req.query.limit as string) || 100; // default 100
+		const offset = parseInt(req.query.offset as string) || 0; // default 0
 		if (offset < 0 || limit < 0 || limit > 5000) {
 			/*let errors = [];
 			if (limit < 1 || limit > 5000) {
@@ -344,9 +227,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			}*/
 			res.status(400).send({
 				error: "Invalid request parameters",
-				params: {limit: "expected an integer between 1 and 5000",
-						offset: "expected an integer >= 0"
-				}
+				params: { limit: "expected an integer between 1 and 5000", offset: "expected an integer >= 0" },
 			});
 			return;
 		}
@@ -372,14 +253,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			total: sections.length,
 			limit: limit,
 			offset: offset,
-			items: sectionResults
-		}
+			items: sectionResults,
+		};
 		res.status(200).send(body);
 	});
 
 	// 10
 	app.get("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", (req, res) => {
-
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -470,7 +350,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		} // end of ai generated
-
 
 		// get course
 		const course = model.getCourseById(req.params.courseId);
@@ -591,50 +470,6 @@ class Model {
 		await fs.writeFile(this.filepath, JSON.stringify(this.data, null, 2), "utf-8");
 	}
 
-	// --- ORG METHODS ---
-
-	/*public getOrgs(): Org[] {
-		return this.data.orgs;
-	}
-
-	public getOrgById(id: string): Org | undefined {
-		return this.data.orgs.find((org) => org.id === id);
-	}
-
-	public async setOrg(id: string, name: string): Promise<Org> {
-		let org = this.getOrgById(id);
-		if (org) {
-			org.name = name;
-		} else {
-			org = { id, name, courseIds: [] };
-			this.data.orgs.push(org);
-		}
-		await this.writeModel();
-		return org;
-	}
-
-	public async delOrg(id: string): Promise<void> {
-		// assumes org exists
-		const orgIndex = this.data.orgs.findIndex((org) => org.id === id);
-
-		if (orgIndex == -1) {
-			return;
-		}
-
-		// remove sections + courses
-		const org = this.getOrgById(id);
-		const courseIds = org?.courseIds;
-		if (courseIds) {
-			for (const courseId of courseIds) {
-				await this.delCourse(courseId);
-			}
-		}
-
-		this.data.orgs.splice(orgIndex, 1);
-		await this.writeModel();
-		return;
-	}*/
-
 	// --- COURSE METHODS ---
 
 	public getCourses(): Course[] {
@@ -666,7 +501,7 @@ class Model {
 		if (courseIndex == -1) {
 			return;
 		}
-    
+
 		// delete associated sections
 		const course = this.getCourseById(id);
 		const sectionIds = course?.sectionIds; // course cannot be undefined
@@ -675,8 +510,6 @@ class Model {
 				await this.delSection(sectionId);
 			}
 		}
-
-		const orgid = this.getCourseById(id)?.orgId as string; // save id
 
 		this.data.courses.splice(courseIndex, 1); // delete course
 
@@ -752,12 +585,6 @@ class Model {
 		return;
 	}
 }
-
-/*export interface Org {
-	id: string;
-	name: string;
-	courseIds: string[];
-}*/
 
 export interface Course {
 	id: string;
