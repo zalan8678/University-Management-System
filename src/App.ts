@@ -579,7 +579,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
-		if (offset < 0 || limit < 0 || limit > 5000) {
+		if (offset < 0 || limit < 1 || limit > 5000) {
 			res.status(400).send({
 				error: "Invalid request parameters",
 				params: { limit: "expected an integer between 1 and 5000", offset: "expected an integer >= 0" },
