@@ -528,7 +528,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		const newCourse = await model.setCourse(req.params.courseId, req.body.title, req.body.dept, req.body.code);
 
 		if (!course) {
-			// does not exist OR be part of correct parent org
 			res.status(201).send({
 				id: newCourse.id,
 				title: newCourse.title,
@@ -620,7 +619,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// 10
-	app.get("/api/v1/orgs/:orgId/courses/:courseId/sections/:sectionId", (req, res) => {
+	app.get("/api/v1/courses/:courseId/sections/:sectionId", (req, res) => {
 		// get course
 		const course = model.getCourseById(req.params.courseId);
 		if (!course) {
@@ -652,7 +651,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			audit: section.audit,
 			links: {
 				self: req.originalUrl,
-				course: `/api/v1/orgs/${req.params.orgId}/courses/${req.params.courseId}`,
+				course: `/api/v1/courses/${req.params.courseId}`,
 			},
 		});
 	});
@@ -1105,7 +1104,6 @@ class Model {
 	}
 
 	public async delCourse(id: string): Promise<void> {
-		// assumes org exists
 		const courseIndex = this.data.courses.findIndex((course) => course.id === id);
 
 		if (courseIndex == -1) {
