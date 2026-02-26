@@ -419,7 +419,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// get courses
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
-		if (offset < 0 || limit < 0 || limit > 5000) {
+		if (offset < 0 || limit < 1 || limit > 5000) {
 			// Genereated by AI
 			let params: Record<string, string> = {};
 
@@ -579,7 +579,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
-		if (offset < 0 || limit < 0 || limit > 5000) {
+		if (offset < 0 || limit < 1 || limit > 5000) {
 			res.status(400).send({
 				error: "Invalid request parameters",
 				params: { limit: "expected an integer between 1 and 5000", offset: "expected an integer >= 0" },
@@ -753,6 +753,42 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			res.sendStatus(204);
 		}
 	});
+	// 12
+	app.delete("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
+		// get course
+		const course = model.getCourseById(req.params.courseId);
+		if (!course) {
+			res.status(404).send({
+				error: "Not found",
+				message: `no course with id '${req.params.courseId}'`,
+			});
+			return;
+		}
+
+		// get section
+		const section = model.getSectionById(req.params.sectionId, req.params.courseId);
+		if (!section || section.courseId != req.params.courseId) {
+			res.status(404).send({
+				error: "Not found",
+				message: `no section with id '${req.params.sectionId}'`,
+			});
+			return;
+		}
+
+		// delete
+		await model.delSection(req.params.sectionId, req.params.courseId); // also handles parents
+		res.status(200).send({
+			id: section.id,
+			instructor: section.instructor,
+			year: section.year,
+			avg: section.avg,
+			pass: section.pass,
+			fail: section.fail,
+			audit: section.audit,
+		});
+	});
+
+	// Start of AI Code
 	app.post("/api/v1/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
 
@@ -795,9 +831,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				return;
 			}
 
-			res.status(200).send({
-				result: results,
-			});
+			res.status(200).send(results);
 			return;
 		} catch (err: any) {
 			res.status(400).send({
@@ -807,41 +841,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		}
 	});
-	// 12
-	app.delete("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
-		// get course
-		const course = model.getCourseById(req.params.courseId);
-		if (!course) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no course with id '${req.params.courseId}'`,
-			});
-			return;
-		}
-
-		// get section
-		const section = model.getSectionById(req.params.sectionId, req.params.courseId);
-		if (!section || section.courseId != req.params.courseId) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no section with id '${req.params.sectionId}'`,
-			});
-			return;
-		}
-
-		// delete
-		await model.delSection(req.params.sectionId, req.params.courseId); // also handles parents
-		res.status(200).send({
-			id: section.id,
-			instructor: section.instructor,
-			year: section.year,
-			avg: section.avg,
-			pass: section.pass,
-			fail: section.fail,
-			audit: section.audit,
-		});
-	});
-	// Start of AI Code
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
 		if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
@@ -946,7 +945,15 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		if (query.OPTIONS.ORDER) {
 			const key = query.OPTIONS.ORDER;
-			projected.sort((a, b) => (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0));
+			projected.sort((a, b) => {
+				if (a[key] < b[key]) return -1;
+				if (a[key] > b[key]) return 1;
+
+				if (a.id < b.id) return -1;
+				if (a.id > b.id) return 1;
+
+				return 0;
+			});
 		}
 
 		return projected;
