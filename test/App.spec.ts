@@ -102,7 +102,7 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("7: PUT /api/v1/orgs/{org}/courses/{course} should respond with status 204", async () => {
+	it("7: PUT /api/v1/courses/{course} should respond with status 204", async () => {
 		// potential tests required for missing params when updating?
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
@@ -119,7 +119,7 @@ describe("REST API v1", function () {
 		expect(res).to.have.property("status", NO_CONTENT);
 		expect(res).to.have.deep.property("body", {});
 	});
-	it("8: PUT /api/v1/orgs/{org}/courses/{course} should respond with status 422: Code Missing", async () => {
+	it("8: PUT /api/v1/courses/{course} should respond with status 422: Code Missing", async () => {
 		const res = await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "title",
 			dept: "Computer Science",
@@ -131,7 +131,7 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("9: DEL /api/v1/courses/{course} should respond with status 200 and body org data", async () => {
+	it("9: DEL /api/v1/courses/{course} should respond with status 200 and body course data", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
@@ -269,7 +269,7 @@ describe("REST API v1", function () {
 			},
 		});
 	});
-	it("11: GET /api/v1/orgs/{org}/courses/{course}/sections should respond with status OK and body params and empty array", async () => {
+	it("11: GET /api/v1/courses/{course}/sections should respond with status OK and body params and empty array", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
@@ -1431,5 +1431,36 @@ describe("REST API v1", function () {
 			{ dept: "Asian Studies", avg: 95 },
 			{ dept: "Asian Studies", avg: 96 },
 		]);
+	});
+	it("28: GET /api/v1/courses/cpsc310/sections/2021 should respond with status OK and body section", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		const res = await request(app).get("/api/v1/courses?limit=1&offset=1");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 2,
+			limit: 1,
+			offset: 1,
+			items: [
+				{
+					id: "weeb123",
+					title: "Introduction to Japanese Media",
+					dept: "Asian Studies",
+					code: "123",
+					links: {
+						self: "/api/v1/courses/weeb123",
+						sections: "/api/v1/courses/weeb123/sections",
+					},
+				},
+			],
+		});
 	});
 });
