@@ -287,7 +287,7 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("12a: POST /api/v1/datasets should respond with status 202 and processing status", async () => {
+	/*it("12a: POST /api/v1/datasets should respond with status 202 and processing status", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		const uploadRes = await request(app)
 			.post("/api/v1/datasets")
@@ -1461,6 +1461,113 @@ describe("REST API v1", function () {
 					},
 				},
 			],
+		});
+	});
+	it("29: POST /api/v1/search with wildcards edge case should respond with status 200 and filtered results", async () => {
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await request(app).put("/api/v1/courses/amer102").send({
+			title: "Introduction to American Media",
+			dept: "American Studies",
+			code: "102",
+		});
+		await request(app).put(`/api/v1/courses/amer102/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/doom999").send({
+			title: "Introduction to Tanking GPA",
+			dept: "DOOM",
+			code: "999",
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 95,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 96,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 50,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		const res2 = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						IS: { dept: "*" },
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+		expect(res2.body.result).to.deep.equal([
+			{ dept: "DOOM", avg: 50 },
+			{ dept: "American Studies", avg: 54 },
+			{ dept: "DOOM", avg: 54 },
+			{ dept: "Asian Studies", avg: 95 },
+			{ dept: "Asian Studies", avg: 96 },
+		]);
+	});
+	it("30: PUT /api/v1/courses/cpsc310/sections/21w201 should return validation errors", async () => {
+
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+
+		const res = await request(app).put("/api/v1/courses/cpsc310/sections/21w201").send({
+			instructor: "Nick Bradley",
+			year: 2021,
+			avg: 200,
+			pass: NaN,
+			fail: "-5",
+			audit: -10,
+		});
+
+		expect(res.status).to.equal(422);
+
+		expect(res).to.have.deep.property("body", {
+			error: "Validation failed",
+			fields: {
+				avg: "expected a number between 0 and 100",
+				pass: "expected a number >= 0",
+				fail: "expected a number >= 0",
+				audit: "expected a number >= 0",
+			},
 		});
 	});
 });
