@@ -655,4 +655,781 @@ describe("REST API v1", function () {
 			],
 		});
 	});
+	/*it("19: POST /api/v1/search should respond with status OK and body 3 depts", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+		const uploadRes = await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		const getRes = await waitForGetCompletion("upload_1");
+
+		expect(getRes).to.have.property("status", 200);
+
+		expect(getRes).to.have.deep.property("body", {
+			id: "upload_1",
+			status: "completed",
+			kind: "course_offerings",
+			stats: {
+				files_total: 100,
+				files_processed: 1,
+				files_skipped: 0,
+				courses_seen: 1,
+				courses_added: 1,
+				courses_modified: 0,
+				sections_seen: 1,
+				sections_added: 1,
+				sections_modified: 0,
+			},
+			message: "Dataset processing complete",
+		});
+		const res = await request(app).post("/api/v1/search").send({
+			kind: "course_offerings",
+			query: {
+				WHERE: {
+					GT: {
+						avg: 99
+					}
+				},
+				OPTIONS: {
+					COLUMNS: [
+						"dept",
+						"avg"
+					],
+					ORDER: "avg"
+				}
+			}
+		});
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", [
+			{
+				dept: "cnps",
+				avg: 99.19
+			},
+			{
+				dept: "math",
+				avg: 99.78
+			},
+			{
+				dept: "math",
+				avg: 99.78
+			}
+		])
+	});*/
+	/*it("19: POST /api/v1/search should respond with status 200 and filtered results", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+
+		// 1. Upload
+		const uploadRes = await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "pair.zip");
+
+		expect(uploadRes.status).to.equal(202);
+		const datasetId = uploadRes.body.id; // Get the actual ID generated
+
+		// 2. Wait for background processing to finish
+		const getRes = await waitForGetCompletion(datasetId);
+		expect(getRes?.body.status).to.equal("completed");
+
+		// 3. Search
+		const res = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						GT: { avg: 99 }
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg"
+					}
+				}
+			});
+
+		// 4. Assertions
+		expect(res.status).to.equal(200);
+
+		// IMPORTANT: Your controller returns { result: [...] }, not just the array
+		expect(res.body).to.have.property("result");
+		expect(res.body.result).to.be.an("array");
+
+		// Verify the data matches your example
+		expect(res.body.result).to.deep.equal([
+			{ dept: "cnps", avg: 99.19 },
+			{ dept: "math", avg: 99.78 },
+			{ dept: "math", avg: 99.78 }
+		]);
+	});*/
+	it("19: POST /api/v1/search should respond with status 200 and filtered results", async () => {
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 96,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 96,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/doom999").send({
+			title: "Introduction to Tanking GPA",
+			dept: "DOOM",
+			code: "999",
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 50,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		// 3. Search
+		const res = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						GT: { avg: 90 },
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+
+		// 4. Assertions
+		expect(res.status).to.equal(200);
+
+		// IMPORTANT: Your controller returns { result: [...] }, not just the array
+		expect(res.body).to.have.property("result");
+		expect(res.body.result).to.be.an("array");
+
+		// Verify the data matches your example
+		expect(res.body.result).to.deep.equal([{ dept: "Asian Studies", avg: 96 }]);
+	});
+	it("20: POST /api/v1/search should respond with validation errors", async () => {
+		const res = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+		expect(res).to.have.property("status", 400);
+		expect(res).to.have.deep.property("body", {
+			error: "Invalid query",
+			message: "Missing WHERE",
+		});
+	});
+	/*// Generated by AI
+	async function populateInChunks(total: number, chunkSize: number) {
+		for (let i = 0; i < total; i += chunkSize) {
+			const batch = [];
+			// Create a chunk of promises
+			for (let j = i; j < i + chunkSize && j < total; j++) {
+				batch.push(
+					request(app)
+						.put(`/api/v1/courses/weeb123/sections/s${j}`)
+						.send({
+							instructor: "R", year: 2021, avg: 85,
+							pass: 50, fail: 0, audit: 0
+						})
+				);
+			}
+
+			// Wait for this chunk to finish
+			await Promise.all(batch);
+
+			// Give the file system a tiny break to prevent Parse Error / ECONNRESET
+			await new Promise(resolve => setTimeout(resolve, 50));
+		}
+	}
+	// End of AI Code
+	it("21: POST /api/v1/search should respond with status 413 and overflow error", async () => {
+		this.timeout(30000);
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await populateInChunks(5001, 900);
+		const res = await request(app).post("/api/v1/search").send({
+			kind: "course_offerings",
+			query: {
+				WHERE: {
+					GT: {
+						avg: 0
+					}
+				},
+				OPTIONS: {
+					COLUMNS: [
+						"dept",
+						"avg"
+					],
+					ORDER: "avg"
+				}
+			}
+		});
+		expect(res).to.have.property("status", 413);
+		expect(res).to.have.deep.property("body", {
+			error: "Too many results",
+			message: "Query would return more than 5000 results",
+			limit: 5000
+		})
+	});
+
+	it("22: POST /api/v1/search should respond with status 422 and validation error", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+		const uploadRes = await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		const getRes = await waitForGetCompletion("upload_1");
+
+		const res = await request(app).post("/api/v1/search").send({
+			query: {
+				WHERE: {
+					GT: {
+						avg: 99
+					}
+				},
+				OPTIONS: {
+					COLUMNS: [
+						"dept",
+						"avg"
+					],
+					ORDER: "avg"
+				}
+			}
+		});
+		expect(res).to.have.property("status", 422);
+		expect(res).to.have.deep.property("body", {
+			error: "Validation failed",
+			fields: {
+				kind: "required but missing"
+			}
+		})
+	}); */
+	/*it("23: POST /api/v1/search should respond with complex query", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+		const uploadRes = await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		const getRes = await waitForGetCompletion("upload_1");
+		const res = await request(app).post("/api/v1/search").send({
+			kind: "course_offerings",
+			query: {
+				WHERE: {
+					OR: [
+						{
+							AND: [
+								{
+									GT: {
+										avg: 90
+									}
+								},
+								{
+									IS: {
+										dept: "adhe"
+									}
+								}
+							]
+						},
+						{
+							EQ: {
+								avg: 95
+							}
+						}
+					]
+				},
+				OPTIONS: {
+					COLUMNS: [
+						"dept",
+						"avg"
+					],
+					ORDER: "avg"
+				}
+			}
+		});
+		expect(res).to.have.property("status", OK);
+		expect(res.body).to.deep.equal([
+			{
+				dept: "adhe",
+				avg: 90.02
+			},
+			{
+				dept: "adhe",
+				avg: 90.16
+			},
+			{
+				dept: "adhe",
+				avg: 90.17
+			},
+			{
+				dept: "adhe",
+				avg: 90.18
+			},
+			{
+				dept: "adhe",
+				avg: 90.5
+			},
+			{
+				dept: "adhe",
+				avg: 90.72
+			},
+			{
+				dept: "adhe",
+				avg: 90.82
+			},
+			{
+				dept: "adhe",
+				avg: 90.85
+			},
+			{
+				dept: "adhe",
+				avg: 91.29
+			},
+			{
+				dept: "adhe",
+				avg: 91.33
+			},
+			{
+				dept: "adhe",
+				avg: 91.33
+			},
+			{
+				dept: "adhe",
+				avg: 91.48
+			},
+			{
+				dept: "adhe",
+				avg: 92.54
+			},
+			{
+				dept: "adhe",
+				avg: 93.33
+			},
+			{
+				dept: "sowk",
+				avg: 95
+			},
+			{
+				dept: "rhsc",
+				avg: 95
+			},
+			{
+				dept: "psyc",
+				avg: 95
+			},
+			{
+				dept: "psyc",
+				avg: 95
+			},
+			{
+				dept: "obst",
+				avg: 95
+			},
+			{
+				dept: "nurs",
+				avg: 95
+			},
+			{
+				dept: "nurs",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "musc",
+				avg: 95
+			},
+			{
+				dept: "mtrl",
+				avg: 95
+			},
+			{
+				dept: "mtrl",
+				avg: 95
+			},
+			{
+				dept: "mtrl",
+				avg: 95
+			},
+			{
+				dept: "math",
+				avg: 95
+			},
+			{
+				dept: "math",
+				avg: 95
+			},
+			{
+				dept: "kin",
+				avg: 95
+			},
+			{
+				dept: "kin",
+				avg: 95
+			},
+			{
+				dept: "kin",
+				avg: 95
+			},
+			{
+				dept: "epse",
+				avg: 95
+			},
+			{
+				dept: "epse",
+				avg: 95
+			},
+			{
+				dept: "epse",
+				avg: 95
+			},
+			{
+				dept: "edcp",
+				avg: 95
+			},
+			{
+				dept: "edcp",
+				avg: 95
+			},
+			{
+				dept: "econ",
+				avg: 95
+			},
+			{
+				dept: "econ",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "crwr",
+				avg: 95
+			},
+			{
+				dept: "cpsc",
+				avg: 95
+			},
+			{
+				dept: "cpsc",
+				avg: 95
+			},
+			{
+				dept: "cnps",
+				avg: 95
+			},
+			{
+				dept: "cnps",
+				avg: 95
+			},
+			{
+				dept: "bmeg",
+				avg: 95
+			},
+			{
+				dept: "bmeg",
+				avg: 95
+			},
+			{
+				dept: "adhe",
+				avg: 96.11
+			}
+		]);
+	});*/
+	it("25: DEL /api/v1/courses/{course}/sections/{section} should respond with status 200 and body section data", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/cpsc310/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+
+		const res = await request(app).del("/api/v1/courses/cpsc310/sections/21w201");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "21w201",
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+	});
+	it("26: POST /api/v1/search should respond with status 200 and filtered results", async () => {
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 95,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 96,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/doom999").send({
+			title: "Introduction to Tanking GPA",
+			dept: "DOOM",
+			code: "999",
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 50,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		// 3. Search
+		const res = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						OR: [
+							{
+								AND: [
+									{
+										GT: {
+											avg: 52,
+										},
+									},
+									{
+										IS: {
+											dept: "DOOM",
+										},
+									},
+								],
+							},
+							{
+								EQ: {
+									avg: 95,
+								},
+							},
+						],
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+		// 4. Assertions
+		expect(res.status).to.equal(200);
+
+		// IMPORTANT: Your controller returns { result: [...] }, not just the array
+		expect(res.body).to.have.property("result");
+		expect(res.body.result).to.be.an("array");
+
+		// Verify the data matches your example
+		expect(res.body.result).to.deep.equal([
+			{ dept: "DOOM", avg: 54 },
+			{ dept: "Asian Studies", avg: 95 },
+		]);
+	});
+	it("27: POST /api/v1/search with wildcards should respond with status 200 and filtered results", async () => {
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Japanese Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 95,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/weeb123/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 96,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/doom999").send({
+			title: "Introduction to Tanking GPA",
+			dept: "DOOM",
+			code: "999",
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec123`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 50,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/doom999/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put("/api/v1/courses/amer102").send({
+			title: "Introduction to American Media",
+			dept: "American Studies",
+			code: "102",
+		});
+		await request(app).put(`/api/v1/courses/amer102/sections/sec124`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		// 3. Search
+		const res = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						IS: { dept: "A*" },
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+		// 4. Assertions
+		expect(res.status).to.equal(200);
+
+		// IMPORTANT: Your controller returns { result: [...] }, not just the array
+		expect(res.body).to.have.property("result");
+		expect(res.body.result).to.be.an("array");
+
+		// Verify the data matches your example
+		expect(res.body.result).to.deep.equal([
+			{ dept: "American Studies", avg: 54 },
+			{ dept: "Asian Studies", avg: 95 },
+			{ dept: "Asian Studies", avg: 96 },
+		]);
+		const res2 = await request(app)
+			.post("/api/v1/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {
+						IS: { dept: "*Studies*" },
+					},
+					OPTIONS: {
+						COLUMNS: ["dept", "avg"],
+						ORDER: "avg",
+					},
+				},
+			});
+		expect(res2.body.result).to.deep.equal([
+			{ dept: "American Studies", avg: 54 },
+			{ dept: "Asian Studies", avg: 95 },
+			{ dept: "Asian Studies", avg: 96 },
+		]);
+	});
 });
