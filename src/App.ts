@@ -419,7 +419,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// get courses
 		const limit = parseInt(req.query.limit as string) || 100; // default 100
 		const offset = parseInt(req.query.offset as string) || 0; // default 0
-		if (offset < 0 || limit < 0 || limit > 5000) {
+		if (offset < 0 || limit < 1 || limit > 5000) {
 			// Genereated by AI
 			let params: Record<string, string> = {};
 
@@ -831,9 +831,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				return;
 			}
 
-			res.status(200).send({
-				result: results,
-			});
+			res.status(200).send(results);
 			return;
 		} catch (err: any) {
 			res.status(400).send({

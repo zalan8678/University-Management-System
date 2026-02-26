@@ -287,7 +287,7 @@ describe("REST API v1", function () {
 		});
 	});
 
-	/*it("12a: POST /api/v1/datasets should respond with status 202 and processing status", async () => {
+	it("12a: POST /api/v1/datasets should respond with status 202 and processing status", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		const uploadRes = await request(app)
 			.post("/api/v1/datasets")
@@ -823,13 +823,7 @@ describe("REST API v1", function () {
 
 		// 4. Assertions
 		expect(res.status).to.equal(200);
-
-		// IMPORTANT: Your controller returns { result: [...] }, not just the array
-		expect(res.body).to.have.property("result");
-		expect(res.body.result).to.be.an("array");
-
-		// Verify the data matches your example
-		expect(res.body.result).to.deep.equal([{ dept: "Asian Studies", avg: 96 }]);
+		expect(res).to.have.deep.property("body", [{ dept: "Asian Studies", avg: 96 }]);
 	});
 	it("20: POST /api/v1/search should respond with validation errors", async () => {
 		const res = await request(app)
@@ -1318,12 +1312,8 @@ describe("REST API v1", function () {
 		// 4. Assertions
 		expect(res.status).to.equal(200);
 
-		// IMPORTANT: Your controller returns { result: [...] }, not just the array
-		expect(res.body).to.have.property("result");
-		expect(res.body.result).to.be.an("array");
-
 		// Verify the data matches your example
-		expect(res.body.result).to.deep.equal([
+		expect(res.body).to.deep.equal([
 			{ dept: "DOOM", avg: 54 },
 			{ dept: "Asian Studies", avg: 95 },
 		]);
@@ -1402,12 +1392,8 @@ describe("REST API v1", function () {
 		// 4. Assertions
 		expect(res.status).to.equal(200);
 
-		// IMPORTANT: Your controller returns { result: [...] }, not just the array
-		expect(res.body).to.have.property("result");
-		expect(res.body.result).to.be.an("array");
-
 		// Verify the data matches your example
-		expect(res.body.result).to.deep.equal([
+		expect(res.body).to.deep.equal([
 			{ dept: "American Studies", avg: 54 },
 			{ dept: "Asian Studies", avg: 95 },
 			{ dept: "Asian Studies", avg: 96 },
@@ -1426,7 +1412,7 @@ describe("REST API v1", function () {
 					},
 				},
 			});
-		expect(res2.body.result).to.deep.equal([
+		expect(res2.body).to.deep.equal([
 			{ dept: "American Studies", avg: 54 },
 			{ dept: "Asian Studies", avg: 95 },
 			{ dept: "Asian Studies", avg: 96 },
@@ -1533,7 +1519,8 @@ describe("REST API v1", function () {
 					},
 				},
 			});
-		expect(res2.body.result).to.deep.equal([
+		expect(res2).to.have.property("status", OK);
+		expect(res2.body).to.deep.equal([
 			{ dept: "DOOM", avg: 50 },
 			{ dept: "American Studies", avg: 54 },
 			{ dept: "DOOM", avg: 54 },
