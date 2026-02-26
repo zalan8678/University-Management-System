@@ -1542,7 +1542,6 @@ describe("REST API v1", function () {
 		]);
 	});
 	it("30: PUT /api/v1/courses/cpsc310/sections/21w201 should return validation errors", async () => {
-
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
