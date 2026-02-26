@@ -110,18 +110,18 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		// PROCESS DATASET
 
-		if (archive) {
-			processDataset(id, archive.buffer);
-		}
-
-		// TEMP STATUS: PROCESSING
-
 		res.status(202).send({
 			id: id,
 			status: "processing",
 			kind: "course_offerings",
 			message: "Dataset accepted for processing",
 		});
+
+		if (archive) {
+			await processDataset(id, archive.buffer);
+		}
+
+		// TEMP STATUS: PROCESSING
 		return;
 	});
 
@@ -148,7 +148,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		const files = Object.values(zip.files).filter(
 			// start of ai gen
-			(file: any) => !file.dir && file.name.startsWith("courses/") && file.name.endsWith(".json")
+			(file: any) => !file.dir && file.name.startsWith("courses/")
 		) as any[]; // end of ai gen
 
 		if (files.length === 0) {
@@ -160,18 +160,18 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		dataset.stats.files_total = files.length;
 
-		for (const file of files) {
-			const content = await file.async("string"); // reads as string
+		const content = await Promise.all(files.map((file) => file.async("string"))); // reads as string, ai gen'd line
 
+		for (const file of content) {
 			let sections; // every "result" is a unique section (result is an array of sections)
 			try {
-				const parsed = JSON.parse(content); // parses
+				const parsed = JSON.parse(file); // parses
 				if (!Array.isArray(parsed.result)) throw new Error(); // this line is ai generated
 				sections = parsed.result;
 				dataset.stats.files_processed++;
 			} catch {
 				dataset.stats.files_skipped++;
-				continue;
+				continue; // skip files that are not valid json
 			}
 
 			for (const section of sections) {
@@ -308,6 +308,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 			}
 		}
+
+		await model.writeModel();
 
 		dataset.status = "completed";
 		dataset.message = "Dataset processing complete";
@@ -541,6 +543,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		} else {
 			res.sendStatus(204); // overwrite
 		}
+
+		await model.writeModel();
 	});
 
 	// 8
@@ -752,6 +756,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			// overwrite
 			res.sendStatus(204);
 		}
+
+        await model.writeModel();
 	});
 	app.post("/api/v1/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
@@ -1099,7 +1105,7 @@ class Model {
 			course = { id, title, dept, code, sectionIds: [] };
 			this.data.courses.push(course);
 		}
-		await this.writeModel();
+
 		return course;
 	}
 
@@ -1164,7 +1170,7 @@ class Model {
 				course.sectionIds.push(id);
 			}
 		}
-		await this.writeModel();
+
 		return section;
 	}
 

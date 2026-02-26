@@ -499,6 +499,36 @@ describe("REST API v1", function () {
 		});
 	});
 
+	it("13f: Case: Provided File", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+		const uploadRes = await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		const getRes = await waitForGetCompletion("upload_1");
+
+		expect(getRes).to.have.property("status", 200);
+
+		expect(getRes).to.have.deep.property("body", {
+			id: "upload_1",
+			status: "completed",
+			kind: "course_offerings",
+			stats: {
+				files_total: 5944,
+				files_processed: 5944,
+				files_skipped: 0,
+				courses_seen: 3589,
+				courses_added: 3589,
+				courses_modified: 0,
+				sections_seen: 64612,
+				sections_added: 64612,
+				sections_modified: 0,
+			},
+			message: "Dataset processing complete",
+		});
+	});
+
 	it("15: GET /api/v1/courses should respond with status OK and body empty array and descriptors for given properties", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
