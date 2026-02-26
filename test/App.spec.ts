@@ -501,7 +501,7 @@ describe("REST API v1", function () {
 
 	it("13f: Case: Provided File", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
-		const uploadRes = await request(app)
+		await request(app)
 			.post("/api/v1/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
@@ -523,6 +523,42 @@ describe("REST API v1", function () {
 				courses_modified: 0,
 				sections_seen: 64612,
 				sections_added: 64612,
+				sections_modified: 0,
+			},
+			message: "Dataset processing complete",
+		});
+	});
+
+	it("13g: Case: Provided File 2x", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+		await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		await waitForGetCompletion("upload_1");
+		await request(app)
+			.post("/api/v1/datasets")
+			.field("kind", "course_offerings")
+			.attach("archive", datasetBuffer, "courses.zip");
+
+		const getRes = await waitForGetCompletion("upload_2");
+
+		expect(getRes).to.have.property("status", 200);
+
+		expect(getRes).to.have.deep.property("body", {
+			id: "upload_2",
+			status: "completed",
+			kind: "course_offerings",
+			stats: {
+				files_total: 5944,
+				files_processed: 5944,
+				files_skipped: 0,
+				courses_seen: 3589,
+				courses_added: 0,
+				courses_modified: 0,
+				sections_seen: 64612,
+				sections_added: 0,
 				sections_modified: 0,
 			},
 			message: "Dataset processing complete",
