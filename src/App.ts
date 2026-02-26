@@ -7,7 +7,8 @@ import path from "path";
  * Express application.
  */
 export type Application = ReturnType<typeof express>;
-
+const mfields = ["avg", "pass", "fail", "audit", "year"];
+const sfields = ["title", "dept", "code", "instructor"];
 /**
  * Configuration options for the application.
  */
@@ -753,7 +754,60 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			res.sendStatus(204);
 		}
 	});
+	app.post("/api/v1/search", async (req, res) => {
+		const { kind, query } = req.body ?? {};
 
+		// ---------------- VALIDATION ----------------
+
+		// Top-level validation
+		const fields: Record<string, string> = {};
+
+		if (kind === undefined) {
+			fields.kind = "required but missing";
+		} else if (kind !== "course_offerings") {
+			fields.kind = "expected to be course_offerings";
+		}
+
+		if (query === undefined) {
+			fields.query = "required but missing";
+		} else if (typeof query !== "object" || query === null) {
+			fields.query = "expected an object";
+		}
+
+		if (Object.keys(fields).length > 0) {
+			res.status(422).send({
+				error: "Validation failed",
+				fields,
+			});
+			return;
+		}
+
+		try {
+			validateQuery(query);
+
+			const results = executeQuery(query);
+
+			if (results.length > 5000) {
+				res.status(413).send({
+					error: "Too many results",
+					message: "Query would return more than 5000 results",
+					limit: 5000,
+				});
+				return;
+			}
+
+			res.status(200).send({
+				result: results,
+			});
+			return;
+		} catch (err: any) {
+			res.status(400).send({
+				error: "Invalid query",
+				message: err.message,
+			});
+			return;
+		}
+	});
 	// 12
 	app.delete("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
 		// get course
@@ -788,6 +842,202 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			audit: section.audit,
 		});
 	});
+	// Start of AI Code
+	function validateMComparison(type: string, obj: any) {
+		const keys = Object.keys(obj);
+		if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
+			throw new Error(`${type} must be an object with one mfield of type number`);
+		}
+	}
+	function validateQuery(query: any) {
+		if (!query.WHERE) {
+			throw new Error("Missing WHERE");
+		}
+		if (!query.OPTIONS) {
+			throw new Error("Missing OPTIONS");
+		}
+
+		if (typeof query.WHERE !== "object") {
+			throw new Error("WHERE must be an object with at most one FILTER");
+		}
+
+		validateFilter(query.WHERE);
+
+		validateOptions(query.OPTIONS);
+	}
+	function validateOptions(options: any) {
+		if (typeof options !== "object" || !options.COLUMNS) {
+			throw new Error("Missing COLUMNS");
+		}
+
+		if (!Array.isArray(options.COLUMNS) || options.COLUMNS.length === 0) {
+			throw new Error("Missing COLUMNS");
+		}
+
+		for (const key of options.COLUMNS) {
+			if (![...mfields, ...sfields].includes(key)) {
+				throw new Error("Unknown key in COLUMNS");
+			}
+		}
+
+		if (options.ORDER) {
+			if (!options.COLUMNS.includes(options.ORDER)) {
+				throw new Error("ORDER must be a key in COLUMNS");
+			}
+		}
+	}
+	function validateFilter(filter: any) {
+		if (Object.keys(filter).length === 0) return;
+
+		const key = Object.keys(filter)[0];
+		const value = filter[key];
+
+		if (key === "AND" || key === "OR") {
+			if (!Array.isArray(value) || value.length === 0) {
+				throw new Error(`${key} must be a non-empty array of FILTER objects`);
+			}
+			value.forEach(validateFilter);
+			return;
+		}
+
+		if (key === "NOT") {
+			if (typeof value !== "object") {
+				throw new Error("NOT must be a FILTER object");
+			}
+			validateFilter(value);
+			return;
+		}
+
+		if (["LT", "GT", "EQ"].includes(key)) {
+			validateMComparison(key, value);
+			return;
+		}
+
+		if (key === "IS") {
+			validateSComparison(value);
+			return;
+		}
+
+		throw new Error("WHERE must be an object with at most one FILTER");
+	}
+	function validateSComparison(obj: any) {
+		const keys = Object.keys(obj);
+
+		if (keys.length !== 1 || !sfields.includes(keys[0]) || typeof obj[keys[0]] !== "string") {
+			throw new Error("IS must be an object with one sfield of type string");
+		}
+
+		const value = obj[keys[0]];
+		const starCount = (value.match(/\*/g) || []).length;
+
+		if (starCount > 2 || (starCount === 2 && !(value.startsWith("*") && value.endsWith("*")))) {
+			throw new Error("IS asterisks can only be first or last character");
+		}
+
+		if (value.slice(1, -1).includes("*")) {
+			throw new Error("IS asterisks can only be first or last character");
+		}
+	}
+	function executeQuery(query: any) {
+		const sections = model.getSections();
+
+		const filtered = sections.filter((section) => evaluateFilter(query.WHERE, section));
+
+		let projected = filtered.map((section) => projectRow(section, query.OPTIONS.COLUMNS));
+
+		if (query.OPTIONS.ORDER) {
+			const key = query.OPTIONS.ORDER;
+			projected.sort((a, b) => (a[key] < b[key] ? -1 : a[key] > b[key] ? 1 : 0));
+		}
+
+		return projected;
+	}
+	function evaluateFilter(filter: any, section: Section): boolean {
+		if (Object.keys(filter).length === 0) return true;
+
+		const key = Object.keys(filter)[0];
+		const value = filter[key];
+
+		if (key === "AND") {
+			return value.every((f: any) => evaluateFilter(f, section));
+		}
+
+		if (key === "OR") {
+			return value.some((f: any) => evaluateFilter(f, section));
+		}
+
+		if (key === "NOT") {
+			return !evaluateFilter(value, section);
+		}
+
+		if (key === "LT") {
+			const field = Object.keys(value)[0];
+			return section[field as keyof Section] < value[field];
+		}
+
+		if (key === "GT") {
+			const field = Object.keys(value)[0]; // e.g., "avg"
+			return section[field as keyof Section] > value[field];
+		}
+
+		if (key === "EQ") {
+			const field = Object.keys(value)[0];
+			return section[field as keyof Section] === value[field];
+		}
+
+		if (key === "IS") {
+			const field = Object.keys(value)[0];
+			const pattern = value[field];
+
+			// Logic to handle course-level fields vs section-level fields
+			if (sfields.includes(field) && field !== "instructor") {
+				const course = model.getCourseById(section.courseId);
+				const val = course ? (course as any)[field] : "";
+				return matchWildcard(val, pattern);
+			}
+
+			return matchWildcard(section[field as keyof Section] as string, pattern);
+		}
+		return false;
+	}
+	function matchWildcard(text: string, pattern: string): boolean {
+		if (!pattern.includes("*")) return text === pattern;
+
+		if (pattern.startsWith("*") && pattern.endsWith("*")) {
+			return text.includes(pattern.slice(1, -1));
+		}
+
+		if (pattern.startsWith("*")) {
+			return text.endsWith(pattern.slice(1));
+		}
+
+		if (pattern.endsWith("*")) {
+			return text.startsWith(pattern.slice(0, -1));
+		}
+
+		return false;
+	}
+	function projectRow(section: Section, columns: string[]) {
+		const course = model.getCourseById(section.courseId);
+
+		const row: any = {};
+
+		for (const col of columns) {
+			if (mfields.includes(col)) {
+				row[col] = section[col as keyof Section];
+			} else if (col === "title") {
+				row[col] = course?.title;
+			} else if (col === "dept") {
+				row[col] = course?.dept;
+			} else if (col === "code") {
+				row[col] = course?.code;
+			} else if (col === "instructor") {
+				row[col] = section.instructor;
+			}
+		}
+
+		return row;
+	} // End of AI Code
 
 	return app;
 }
