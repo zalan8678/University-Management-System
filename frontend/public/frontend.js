@@ -1,8 +1,11 @@
+
 let departments = [];
 window.addEventListener("DOMContentLoaded", async () => {
 	const res = await fetch("/api/v1/courses");
 	const courses = await res.json();
 
+
+window.addEventListener("DOMContentLoaded", async () => {
     // UPLOAD BUTTON THINGS
     const uploadLoc = document.getElementById("uploadLocation");
 
@@ -21,7 +24,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     statusDiv.style.marginLeft = "10px"; 
     statusDiv.style.fontWeight = "bold";
     statusDiv.style.color = "black";
-    uploadLoc.appendChild(statusDiv);
+    uploadLoc.appendChild(statusDiv); // end of ai gen
     statusDiv.textContent = `Upload Status: Awaiting...`;
 
     uploadBtn.onclick = () => fileInput.click(); // when click ask for input
@@ -32,7 +35,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
         // ai gen
         const formData = new FormData();
-        formData.append("dataset", file);
+        formData.append("archive", file);
         formData.append("kind", "course_offerings"); 
         // end ai gen
 
@@ -44,7 +47,7 @@ window.addEventListener("DOMContentLoaded", async () => {
         const data = await res.json();
 
         if (res.status == 202) {
-            alert("Upload accepted and is being processed");
+            alert("Upload Accepted!");
         } else if (res.status == 422) {
             alert("Error 422: Validation failed");
             return;
@@ -55,10 +58,14 @@ window.addEventListener("DOMContentLoaded", async () => {
 
         const datasetId = data.id;
 
-        statusDiv.textContent = "Processing dataset...";
+
+        statusDiv.textContent = "Upload Status: Processing...";
 
         pollComplete(datasetId, statusDiv);
     });
+
+    const res = await fetch("/api/v1/courses");
+	const courses = await res.json();
 
 	document.body.appendChild(document.createElement("br"));
 
@@ -276,20 +283,20 @@ async function applyInstructorFilter() {
 
 async function pollComplete(id, statusDiv) {
 
-    // interval related components in this function is ai gen
+    // interval related components in this function is ai generated
     const interval = setInterval(async () => {
         const res = await fetch(`/api/v1/datasets/${id}`);
         const dataset = await res.json();
 
         if (dataset.status === "processing") {
-            statusDiv.textContent = "Processing";
+            statusDiv.textContent = "Upload Status: Processing...";
         }
 
         if (dataset.status === "completed") {
             clearInterval(interval);
 
             statusDiv.innerHTML = `
-                Processing complete! <br>
+                Upload Status: Processing Complete! <br>
                 Courses added: ${dataset.stats.courses_added} <br>
                 Courses modified: ${dataset.stats.courses_modified} <br>
                 Sections added: ${dataset.stats.sections_added} <br>
@@ -299,7 +306,7 @@ async function pollComplete(id, statusDiv) {
 
         if (dataset.status === "failed") {
             clearInterval(interval);
-            statusDiv.textContent = `404 Not Found: ${dataset.message}`;
+            statusDiv.textContent = `Upload Status: Failed - ${dataset.message}`;
         }
 
     }, 1000); // every 1 second
