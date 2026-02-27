@@ -180,6 +180,23 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				// PROCESS COURSES
 				const courseID = `${section.Subject}${section.Course}`;
 
+				const modelCourse = model.getCourseById(courseID); // the course in the MODEL
+				const mapCourse = seenCourses.get(courseID); // the course in the MAP
+
+				let latestYear = -Infinity;
+				if (mapCourse) {
+					latestYear = mapCourse.latestYear;
+				} else if (modelCourse) {
+					latestYear = modelCourse.latestYear;
+				}
+
+				let actualYear;
+				if (section.Year === "overall") {
+					actualYear = 1900;
+				} else {
+					actualYear = Number(section.Year);
+				}
+
 				try {
 					validateCourseInput(
 						courseID, // id
@@ -188,21 +205,21 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						section.Course // code
 					);
 
-					const modelCourse = model.getCourseById(courseID); // the course in the MODEL
-					const mapCourse = seenCourses.get(courseID); // the course in the MAP
-
 					if (!modelCourse && !mapCourse) {
 						// course does not exist AND is not being PROCESSED - ADD
 
 						model.setCourse(courseID, section.Title, section.Subject, section.Course);
 
 						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
 						seenCourses.set(courseID, newCourse); // add to map
 						dataset.stats.courses_seen++;
 						dataset.stats.courses_added++;
 					} else if (
 						mapCourse &&
-						(mapCourse.title !== section.Title ||
+						((mapCourse.title !== section.Title && actualYear > latestYear) ||
 							mapCourse.dept !== section.Subject ||
 							mapCourse.code !== section.Course)
 					) {
@@ -211,11 +228,14 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						model.setCourse(courseID, section.Title, section.Subject, section.Course);
 
 						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
 						seenCourses.set(courseID, newCourse); // add to map
 					} else if (
 						!mapCourse &&
 						modelCourse &&
-						(modelCourse.title !== section.Title ||
+						((modelCourse.title !== section.Title && actualYear > latestYear) ||
 							modelCourse.dept !== section.Subject ||
 							modelCourse.code !== section.Course)
 					) {
@@ -224,46 +244,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						model.setCourse(courseID, section.Title, section.Subject, section.Course);
 
 						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
 						seenCourses.set(courseID, newCourse); // add to map
 						dataset.stats.courses_seen++;
 						dataset.stats.courses_modified++;
-
-						// let thisYear;
-						// if (section.Section === "overall") {
-						// 	thisYear = 1900;
-						// } else {
-						// 	thisYear = Number(section.Year);
-						// }
-
-						// let prevUploadYear = latestYearForCourse.get(courseID);
-						// if (prevUploadYear === undefined) {
-						// 	prevUploadYear = -Infinity;
-						// }
-
-						// let existingYear = getLatestYearforCourse(courseID);
-
-						// let newestKnownYear = prevUploadYear;
-						// if (existingYear > newestKnownYear) {
-						// 	newestKnownYear = existingYear;
-						// }
-
-						// if (thisYear > newestKnownYear) {
-						// 	latestYearForCourse.set(courseID, thisYear);
-						// 	await model.setCourse(
-						// 		courseID, // id
-						// 		section.Title, // OVERRIDE TITLE (THIS YEAR IS MORE RECENT)
-						// 		section.Subject, // dept
-						// 		section.Course // code
-						// 	);
-						// } else {
-						// 	await model.setCourse(
-						// 		courseID, // id
-						// 		currCourse.title, // OLD TITLE
-						// 		section.Subject, // dept
-						// 		section.Course // code
-						// 	);
-						// }
-					} else if (!mapCourse && modelCourse) {
+					} else if (!mapCourse && modelCourse && modelCourse.title === section.Title) {
 						// assumed: not different from model
 						const newCourse = model.getCourseById(courseID);
 						seenCourses.set(courseID, newCourse); // add to map
@@ -275,16 +262,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 
 				// PROCESS SECTIONS
-				dataset.stats.sections_seen++;
+
 				try {
 					const currSection = await model.getSectionById(section.id, courseID);
-
-					let actualYear;
-					if (section.Section === "overall") {
-						actualYear = 1900;
-					} else {
-						actualYear = Number(section.Year);
-					}
 
 					validateSectionInput(
 						courseID, // courseid
@@ -1130,7 +1110,7 @@ class Model {
 			course.dept = dept;
 			course.code = code;
 		} else {
-			course = { id, title, dept, code, sectionIds: [] };
+			course = { id, title, dept, code, sectionIds: [], latestYear: -Infinity };
 			this.data.courses.push(course);
 		}
 
@@ -1231,6 +1211,7 @@ export interface Course {
 	dept: string;
 	code: string;
 	sectionIds: string[];
+	latestYear: number;
 }
 
 export interface Section {
