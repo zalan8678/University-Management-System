@@ -131,8 +131,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		}
 
-		const latestYearForCourse = new Map<string, number>(); // this line is ai gen
-
 		// VALIDATION
 
 		let zip;
@@ -163,9 +161,11 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		const content = await Promise.all(files.map((file) => file.async("string"))); // reads as string, ai gen'd line
 
 		const seenCourses = new Map();
+		const seenSections = new Map();
 
 		for (const file of content) {
 			let sections; // every "result" is a unique section (result is an array of sections)
+
 			try {
 				const parsed = JSON.parse(file); // parses
 				if (!Array.isArray(parsed.result)) throw new Error(); // this line is ai generated
@@ -262,10 +262,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 
 				// PROCESS SECTIONS
+				const sectionID = String(section.id);
+				const mapID = `${courseID}${sectionID}`;
+				const modelSection = model.getSectionById(sectionID, courseID);
+				const mapSection = seenSections.get(mapID);
 
 				try {
-					const currSection = await model.getSectionById(section.id, courseID);
-
 					validateSectionInput(
 						courseID, // courseid
 						String(section.id), // id
@@ -277,9 +279,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						Number(section.Audit) // audit
 					);
 
-					if (!currSection) {
-						// section does not exist - ADD
-						await model.setSection(
+					if (!mapSection && !modelSection) {
+						// model does not exist AND is not being PROCESSED - ADD
+
+						model.setSection(
 							courseID, // courseid
 							String(section.id), // id
 							section.Professor, // instructor
@@ -289,28 +292,67 @@ export async function createApp(config: AppConfig): Promise<Application> {
 							Number(section.Fail), // fail
 							Number(section.Audit) // audit
 						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
 						dataset.stats.sections_added++;
 					} else if (
-						// section already exists - UPDATE
-						currSection.instructor !== section.Professor ||
-						currSection.year !== actualYear ||
-						currSection.avg !== Number(section.Avg) ||
-						currSection.pass !== Number(section.Pass) ||
-						currSection.fail !== Number(section.Fail) ||
-						currSection.audit !== Number(section.Audit)
+						mapSection &&
+						(mapSection.instructor !== section.Professor ||
+							mapSection.year !== actualYear ||
+							Number(mapSection.avg) !== Number(section.Avg) ||
+							Number(mapSection.pass) !== Number(section.Pass) ||
+							Number(mapSection.fail) !== Number(section.Fail) ||
+							Number(mapSection.audit) !== Number(section.Audit))
 					) {
-						await model.setSection(
+						// Section is in MAP and is DIFFERENT from MAP
+
+						model.setSection(
 							courseID, // courseid
 							String(section.id), // id
 							section.Professor, // instructor
-							actualYear, // year
+							Number(actualYear), // year
 							Number(section.Avg), // avg
 							Number(section.Pass), // pass
 							Number(section.Fail), // fail
 							Number(section.Audit) // audit
 						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+					} else if (
+						!mapSection &&
+						modelSection &&
+						(modelSection.instructor !== section.Professor ||
+							modelSection.year !== actualYear ||
+							Number(modelSection.avg) !== Number(section.Avg) ||
+							Number(modelSection.pass) !== Number(section.Pass) ||
+							Number(modelSection.fail) !== Number(section.Fail) ||
+							Number(modelSection.audit) !== Number(section.Audit))
+					) {
+						// course is NOT in MAP, exists in MODEL and is DIFFERENT from MODEL
+
+						model.setSection(
+							courseID, // courseid
+							String(section.id), // id
+							section.Professor, // instructor
+							Number(actualYear), // year
+							Number(section.Avg), // avg
+							Number(section.Pass), // pass
+							Number(section.Fail), // fail
+							Number(section.Audit) // audit
+						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
 						dataset.stats.sections_modified++;
-					} // ELSE: section exists and is updated - NO CHANGE
+					} else if (!mapSection && modelSection) {
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
+					}
 				} catch (err) {
 					continue;
 				}
