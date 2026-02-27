@@ -5,7 +5,34 @@
 		<title>310 Frontend</title>
 		<link href="/style.css" rel="stylesheet" />
 	</head>
+	<style>
+		table {
+			border-spacing: 0;
+			width: 100%;
+			border: 1px solid #ddd;
+		}
+
+		th, td {
+			text-align: left;
+			padding: 16px;
+		}
+
+		tr:nth-child(even) {
+			background-color: #f2f2f2
+		}
+	</style>
 	<body>
+	<table id="myTable">
+		<tr>
+			<!--When a header is clicked, run the sortTable function, with a parameter, 0 for sorting by names, 1 for sorting by country:-->
+			<th onclick="sortByAttribute('dept')">Dept</th>
+			<th onclick="sortByAttribute('code')">Code</th>
+			<th onclick="sortByAttribute('title')">Title</th>
+			<th onclick="sortByAttribute('year')">Year</th>
+			<th onclick="sortByAttribute('instructor')">Instructor</th>
+			<th onclick="sortByAttribute('avg')">Avg</th>
+		</tr>
+	</table>
 		<script type="text/javascript" src="/frontend.js"></script>
 	</body>
 </html>
