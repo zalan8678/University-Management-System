@@ -3,6 +3,63 @@ window.addEventListener("DOMContentLoaded", async () => {
 	const res = await fetch("/api/v1/courses");
 	const courses = await res.json();
 
+    // UPLOAD BUTTON THINGS
+    const uploadLoc = document.getElementById("uploadLocation");
+
+    const fileInput = document.createElement("input"); // FILE INPUT
+    fileInput.type = "file";
+    fileInput.style.display = "none";
+    uploadLoc.appendChild(fileInput);
+
+    const uploadBtn = document.createElement("button"); // BUTTON
+    uploadBtn.textContent = "Upload Datset";
+    uploadBtn.style.marginLeft = "10px"; 
+    uploadLoc.appendChild(uploadBtn);
+
+    const statusDiv = document.createElement("div"); // STATUS (ai gen)
+    statusDiv.style.marginTop = "10px";
+    statusDiv.style.marginLeft = "10px"; 
+    statusDiv.style.fontWeight = "bold";
+    statusDiv.style.color = "black";
+    uploadLoc.appendChild(statusDiv);
+    statusDiv.textContent = `Upload Status: Awaiting...`;
+
+    uploadBtn.onclick = () => fileInput.click(); // when click ask for input
+
+    fileInput.addEventListener("change", async () => {
+        const file = fileInput.files[0];
+        if (!file) return; 
+
+        // ai gen
+        const formData = new FormData();
+        formData.append("dataset", file);
+        formData.append("kind", "course_offerings"); 
+        // end ai gen
+
+        const res = await fetch("/api/v1/datasets", {
+            method: "POST",
+            body: formData
+        });
+
+        const data = await res.json();
+
+        if (res.status == 202) {
+            alert("Upload accepted and is being processed");
+        } else if (res.status == 422) {
+            alert("Error 422: Validation failed");
+            return;
+        } else {
+            statusDiv.textContent = `Error: ${res.status}`;
+            return;
+        };
+
+        const datasetId = data.id;
+
+        statusDiv.textContent = "Processing dataset...";
+
+        pollComplete(datasetId, statusDiv);
+    });
+
 	document.body.appendChild(document.createElement("br"));
 
 	for (const course of courses.items) {
@@ -215,3 +272,35 @@ async function applyInstructorFilter() {
 	}
 }
 
+    
+
+async function pollComplete(id, statusDiv) {
+
+    // interval related components in this function is ai gen
+    const interval = setInterval(async () => {
+        const res = await fetch(`/api/v1/datasets/${id}`);
+        const dataset = await res.json();
+
+        if (dataset.status === "processing") {
+            statusDiv.textContent = "Processing";
+        }
+
+        if (dataset.status === "completed") {
+            clearInterval(interval);
+
+            statusDiv.innerHTML = `
+                Processing complete! <br>
+                Courses added: ${dataset.stats.courses_added} <br>
+                Courses modified: ${dataset.stats.courses_modified} <br>
+                Sections added: ${dataset.stats.sections_added} <br>
+                Sections modified: ${dataset.stats.sections_modified} <br>
+            `;
+        }
+
+        if (dataset.status === "failed") {
+            clearInterval(interval);
+            statusDiv.textContent = `404 Not Found: ${dataset.message}`;
+        }
+
+    }, 1000); // every 1 second
+}

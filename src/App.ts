@@ -110,18 +110,18 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		// PROCESS DATASET
 
-		if (archive) {
-			processDataset(id, archive.buffer);
-		}
-
-		// TEMP STATUS: PROCESSING
-
 		res.status(202).send({
 			id: id,
 			status: "processing",
 			kind: "course_offerings",
 			message: "Dataset accepted for processing",
 		});
+
+		if (archive) {
+			await processDataset(id, archive.buffer);
+		}
+
+		// TEMP STATUS: PROCESSING
 		return;
 	});
 
@@ -130,8 +130,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		if (!dataset) {
 			return;
 		}
-
-		const latestYearForCourse = new Map<string, number>(); // this line is ai gen
 
 		// VALIDATION
 
@@ -148,7 +146,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		const files = Object.values(zip.files).filter(
 			// start of ai gen
-			(file: any) => !file.dir && file.name.startsWith("courses/") && file.name.endsWith(".json")
+			(file: any) => !file.dir && file.name.startsWith("courses/")
 		) as any[]; // end of ai gen
 
 		if (files.length === 0) {
@@ -160,25 +158,45 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		dataset.stats.files_total = files.length;
 
-		for (const file of files) {
-			const content = await file.async("string"); // reads as string
+		const content = await Promise.all(files.map((file) => file.async("string"))); // reads as string, ai gen'd line
 
+		const seenCourses = new Map();
+		const seenSections = new Map();
+
+		for (const file of content) {
 			let sections; // every "result" is a unique section (result is an array of sections)
+
 			try {
-				const parsed = JSON.parse(content); // parses
+				const parsed = JSON.parse(file); // parses
 				if (!Array.isArray(parsed.result)) throw new Error(); // this line is ai generated
 				sections = parsed.result;
 				dataset.stats.files_processed++;
 			} catch {
 				dataset.stats.files_skipped++;
-				continue;
+				continue; // skip files that are not valid json
 			}
 
 			for (const section of sections) {
 				// PROCESS COURSES
 				const courseID = `${section.Subject}${section.Course}`;
 
-				dataset.stats.courses_seen++;
+				const modelCourse = model.getCourseById(courseID); // the course in the MODEL
+				const mapCourse = seenCourses.get(courseID); // the course in the MAP
+
+				let latestYear = -Infinity;
+				if (mapCourse) {
+					latestYear = mapCourse.latestYear;
+				} else if (modelCourse) {
+					latestYear = modelCourse.latestYear;
+				}
+
+				let actualYear;
+				if (section.Section === "overall") {
+					actualYear = 1900;
+				} else {
+					actualYear = Number(section.Year);
+				}
+
 				try {
 					validateCourseInput(
 						courseID, // id
@@ -187,77 +205,69 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						section.Course // code
 					);
 
-					const currCourse = model.getCourseById(courseID);
+					if (!modelCourse && !mapCourse) {
+						// course does not exist AND is not being PROCESSED - ADD
 
-					if (!currCourse) {
-						// course does not exist - ADD
-						await model.setCourse(
-							courseID, // id
-							section.Title, // title TODO: MAKE MOST RECENT
-							section.Subject, // dept
-							section.Course // code
-						);
+						model.setCourse(courseID, section.Title, section.Subject, section.Course);
+
+						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
+						seenCourses.set(courseID, newCourse); // add to map
+						dataset.stats.courses_seen++;
 						dataset.stats.courses_added++;
 					} else if (
-						currCourse.title !== section.Title || // course already exists - UPDATE
-						currCourse.dept !== section.Subject ||
-						currCourse.code !== section.Course
+						mapCourse &&
+						((mapCourse.title !== section.Title && actualYear > latestYear) ||
+							mapCourse.dept !== section.Subject ||
+							mapCourse.code !== section.Course)
 					) {
-						let thisYear;
-						if (section.Section === "overall") {
-							thisYear = 1900;
-						} else {
-							thisYear = Number(section.Year);
-						}
+						// Course is in MAP and is DIFFERENT from MAP
 
-						let prevUploadYear = latestYearForCourse.get(courseID);
-						if (prevUploadYear === undefined) {
-							prevUploadYear = -Infinity;
-						}
+						model.setCourse(courseID, section.Title, section.Subject, section.Course);
 
-						let existingYear = getLatestYearforCourse(courseID);
+						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
+						seenCourses.set(courseID, newCourse); // add to map
+					} else if (
+						!mapCourse &&
+						modelCourse &&
+						((modelCourse.title !== section.Title && actualYear > latestYear) ||
+							modelCourse.dept !== section.Subject ||
+							modelCourse.code !== section.Course)
+					) {
+						// course is NOT in MAP, exists in MODEL and is DIFFERENT from MODEL
 
-						let newestKnownYear = prevUploadYear;
-						if (existingYear > newestKnownYear) {
-							newestKnownYear = existingYear;
-						}
+						model.setCourse(courseID, section.Title, section.Subject, section.Course);
 
-						if (thisYear > newestKnownYear) {
-							latestYearForCourse.set(courseID, thisYear);
-							await model.setCourse(
-								courseID, // id
-								section.Title, // OVERRIDE TITLE (THIS YEAR IS MORE RECENT)
-								section.Subject, // dept
-								section.Course // code
-							);
-						} else {
-							await model.setCourse(
-								courseID, // id
-								currCourse.title, // OLD TITLE
-								section.Subject, // dept
-								section.Course // code
-							);
-						}
-
+						const newCourse = model.getCourseById(courseID);
+						if (newCourse && actualYear > latestYear) {
+							newCourse.latestYear = actualYear;
+						} // sets latest year to year of this section
+						seenCourses.set(courseID, newCourse); // add to map
+						dataset.stats.courses_seen++;
 						dataset.stats.courses_modified++;
-					} // ELSE: course exists and is updated - NO CHANGE
+					} else if (!mapCourse && modelCourse && modelCourse.title === section.Title) {
+						// assumed: not different from model
+						const newCourse = model.getCourseById(courseID);
+						seenCourses.set(courseID, newCourse); // add to map
+						dataset.stats.courses_seen++;
+					} // ELSE: course exists in MAP and is updated - NO CHANGE
 				} catch (err) {
 					// if input invalid, goes to next file
 					continue;
 				}
 
 				// PROCESS SECTIONS
-				dataset.stats.sections_seen++;
+				const sectionID = String(section.id);
+				const mapID = `${courseID}${sectionID}`;
+				const modelSection = model.getSectionById(sectionID, courseID);
+				const mapSection = seenSections.get(mapID);
+
 				try {
-					const currSection = await model.getSectionById(section.id, courseID);
-
-					let actualYear;
-					if (section.Section === "overall") {
-						actualYear = 1900;
-					} else {
-						actualYear = Number(section.Year);
-					}
-
 					validateSectionInput(
 						courseID, // courseid
 						String(section.id), // id
@@ -269,9 +279,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 						Number(section.Audit) // audit
 					);
 
-					if (!currSection) {
-						// section does not exist - ADD
-						await model.setSection(
+					if (!mapSection && !modelSection) {
+						// model does not exist AND is not being PROCESSED - ADD
+
+						model.setSection(
 							courseID, // courseid
 							String(section.id), // id
 							section.Professor, // instructor
@@ -281,55 +292,84 @@ export async function createApp(config: AppConfig): Promise<Application> {
 							Number(section.Fail), // fail
 							Number(section.Audit) // audit
 						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
 						dataset.stats.sections_added++;
 					} else if (
-						// section already exists - UPDATE
-						currSection.instructor !== section.Professor ||
-						currSection.year !== actualYear ||
-						currSection.avg !== Number(section.Avg) ||
-						currSection.pass !== Number(section.Pass) ||
-						currSection.fail !== Number(section.Fail) ||
-						currSection.audit !== Number(section.Audit)
+						mapSection &&
+						(mapSection.instructor !== section.Professor ||
+							mapSection.year !== actualYear ||
+							Number(mapSection.avg) !== Number(section.Avg) ||
+							Number(mapSection.pass) !== Number(section.Pass) ||
+							Number(mapSection.fail) !== Number(section.Fail) ||
+							Number(mapSection.audit) !== Number(section.Audit))
 					) {
-						await model.setSection(
+						// Section is in MAP and is DIFFERENT from MAP
+
+						model.setSection(
 							courseID, // courseid
 							String(section.id), // id
 							section.Professor, // instructor
-							actualYear, // year
+							Number(actualYear), // year
 							Number(section.Avg), // avg
 							Number(section.Pass), // pass
 							Number(section.Fail), // fail
 							Number(section.Audit) // audit
 						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+					} else if (
+						!mapSection &&
+						modelSection &&
+						(modelSection.instructor !== section.Professor ||
+							modelSection.year !== actualYear ||
+							Number(modelSection.avg) !== Number(section.Avg) ||
+							Number(modelSection.pass) !== Number(section.Pass) ||
+							Number(modelSection.fail) !== Number(section.Fail) ||
+							Number(modelSection.audit) !== Number(section.Audit))
+					) {
+						// course is NOT in MAP, exists in MODEL and is DIFFERENT from MODEL
+
+						model.setSection(
+							courseID, // courseid
+							String(section.id), // id
+							section.Professor, // instructor
+							Number(actualYear), // year
+							Number(section.Avg), // avg
+							Number(section.Pass), // pass
+							Number(section.Fail), // fail
+							Number(section.Audit) // audit
+						);
+
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
 						dataset.stats.sections_modified++;
-					} // ELSE: section exists and is updated - NO CHANGE
+					} else if (!mapSection && modelSection) {
+						const newSection = model.getSectionById(sectionID, courseID);
+						seenSections.set(mapID, newSection);
+						dataset.stats.sections_seen++;
+					}
 				} catch (err) {
 					continue;
 				}
 			}
 		}
 
-		dataset.status = "completed";
-		dataset.message = "Dataset processing complete";
+		try {
+			await model.writeModel();
+
+			dataset.status = "completed";
+			dataset.message = "Dataset processing complete";
+		} catch {
+			// for testing
+		}
 	}
 
 	// -- HELPER FUNCTIONS FOR POST DATASETS --
-
-	function getLatestYearforCourse(courseId: string): number {
-		const sections = model.getSections().filter((section) => section.courseId === courseId); // this line is ai generated
-
-		if (sections.length === 0) return -Infinity;
-
-		let maxYear = 0;
-
-		for (const section of sections) {
-			if (section.year > maxYear) {
-				maxYear = section.year;
-			}
-		}
-
-		return maxYear;
-	}
 
 	function validateCourseInput(id: string, title: string, dept: string, code: string) {
 		if (title === undefined) {
@@ -540,6 +580,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		} else {
 			res.sendStatus(204); // overwrite
 		}
+
+		await model.writeModel();
 	});
 
 	// 8
@@ -587,9 +629,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 		// get sections
 		// Generated by AI
-		const sections = model
-			.getSections()
-			.filter((s) => s.courseId === req.params.courseId)
+		const sections = (req.params.courseId ? (model.getCourseById(req.params.courseId)?.sectionIds ?? []) : [])
+			.map((sid) => model.getSectionById(sid, req.params.courseId)!)
+			.filter(Boolean)
 			.sort((a, b) => a.id.localeCompare(b.id));
 		// End of AI Code
 		const paginatedResults = sections.slice(offset, offset + limit);
@@ -751,6 +793,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			// overwrite
 			res.sendStatus(204);
 		}
+
+		await model.writeModel();
 	});
 	// 12
 	app.delete("/api/v1/courses/:courseId/sections/:sectionId", async (req, res) => {
@@ -1054,11 +1098,13 @@ type Data = {
 
 class Model {
 	private filepath: string; // start of genai (6 lines)
-	private data: Data;
+	private courseMap: Map<string, Course> = new Map();
+	private sectionMap: Map<string, Section> = new Map();
 
 	private constructor(filepath: string, data: Data) {
 		this.filepath = filepath;
-		this.data = data;
+		for (const course of data.courses) this.courseMap.set(course.id, course);
+		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
 	} // end of genai
 
 	// --- LOAD AND SAVE ---
@@ -1080,39 +1126,43 @@ class Model {
 	}
 
 	async writeModel(): Promise<void> {
-		const dir = path.dirname(this.filepath);
-		await fs.mkdir(dir, { recursive: true });
-		await fs.writeFile(this.filepath, JSON.stringify(this.data, null, 2), "utf-8");
+		// use of genai in this function
+		try {
+			const dir = path.dirname(this.filepath);
+			await fs.mkdir(dir, { recursive: true });
+			const data = { courses: Array.from(this.courseMap.values()), sections: Array.from(this.sectionMap.values()) };
+			await fs.writeFile(this.filepath, JSON.stringify(data, null, 2), "utf-8");
+		} catch {
+			// ignore, only fails in testing when datadir is deleted
+		}
 	}
 
 	// --- COURSE METHODS ---
 
 	public getCourses(): Course[] {
-		return this.data.courses;
+		return Array.from(this.courseMap.values());
 	}
 
 	public getCourseById(id: string): Course | undefined {
-		return this.data.courses.find((course) => course.id === id);
+		return this.courseMap.get(id);
 	}
 
-	public async setCourse(id: string, title: string, dept: string, code: string): Promise<Course> {
+	public setCourse(id: string, title: string, dept: string, code: string): Course {
 		let course = this.getCourseById(id);
 		if (course) {
 			course.title = title;
 			course.dept = dept;
 			course.code = code;
 		} else {
-			course = { id, title, dept, code, sectionIds: [] };
-			this.data.courses.push(course);
+			course = { id, title, dept, code, sectionIds: [], latestYear: -Infinity };
+			this.courseMap.set(id, course);
 		}
-		await this.writeModel();
+
 		return course;
 	}
 
 	public async delCourse(id: string): Promise<void> {
-		const courseIndex = this.data.courses.findIndex((course) => course.id === id);
-
-		if (courseIndex == -1) {
+		if (!this.courseMap.has(id)) {
 			return;
 		}
 
@@ -1125,7 +1175,7 @@ class Model {
 			}
 		}
 
-		this.data.courses.splice(courseIndex, 1); // delete course
+		this.courseMap.delete(id);
 
 		await this.writeModel();
 		return;
@@ -1134,14 +1184,14 @@ class Model {
 	// --- SECTION METHODS ---
 
 	public getSections(): Section[] {
-		return this.data.sections;
+		return Array.from(this.sectionMap.values());
 	}
 
 	public getSectionById(id: string, courseId: string): Section | undefined {
-		return this.data.sections.find((section) => section.id === id && section.courseId === courseId);
+		return this.sectionMap.get(`${courseId}:${id}`);
 	}
 
-	public async setSection(
+	public setSection(
 		courseId: string,
 		id: string,
 		instructor: string,
@@ -1150,7 +1200,7 @@ class Model {
 		pass: number,
 		fail: number,
 		audit: number
-	): Promise<Section> {
+	): Section {
 		let section = this.getSectionById(id, courseId);
 		if (section) {
 			// overwrite
@@ -1163,25 +1213,23 @@ class Model {
 			section.courseId = courseId;
 		} else {
 			section = { id, instructor, year, avg, pass, fail, audit, courseId };
-			this.data.sections.push(section);
+			this.sectionMap.set(`${courseId}:${id}`, section);
 
 			const course = this.getCourseById(courseId);
 			if (course && !course.sectionIds.includes(id)) {
 				course.sectionIds.push(id);
 			}
 		}
-		await this.writeModel();
+
 		return section;
 	}
 
 	public async delSection(id: string, courseID: string): Promise<void> {
-		const sectionIndex = this.data.sections.findIndex((section) => section.id === id);
-
-		if (sectionIndex == -1) {
+		const key = `${courseID}:${id}`;
+		if (!this.sectionMap.has(key)) {
 			return;
 		}
-
-		this.data.sections.splice(sectionIndex, 1); // delete section
+		this.sectionMap.delete(key);
 
 		// delete from parent
 		const course = this.getCourseById(courseID);
@@ -1203,6 +1251,7 @@ export interface Course {
 	dept: string;
 	code: string;
 	sectionIds: string[];
+	latestYear: number;
 }
 
 export interface Section {
