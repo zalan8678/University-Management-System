@@ -1556,4 +1556,127 @@ describe("REST API v1", function () {
 			},
 		});
 	});
+	it("31: GET /api/v1/courses should return results in stable order.", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/cpsc210").send({
+			title: "Software Construction",
+			dept: "Computer Science",
+			code: "210",
+		});
+
+		const res = await request(app).get("/api/v1/courses");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 2,
+			limit: 100,
+			offset: 0,
+			items: [
+				{
+					id: "cpsc210",
+					title: "Software Construction",
+					dept: "Computer Science",
+					code: "210",
+					links: {
+						self: "/api/v1/courses/cpsc210",
+						sections: `/api/v1/courses/cpsc210/sections`,
+					},
+				},
+				{
+					id: "cpsc310",
+					title: "Introduction to Software Engineering",
+					dept: "Computer Science",
+					code: "310",
+					links: {
+						self: "/api/v1/courses/cpsc310",
+						sections: `/api/v1/courses/cpsc310/sections`,
+					},
+				},
+			],
+		});
+	});
+	it("32: GET /api/v1/courses should return results in stable order.", async () => {
+		await request(app).put("/api/v1/courses/cpsc210").send({
+			title: "Software Construction",
+			dept: "Computer Science",
+			code: "210",
+		});
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		const res = await request(app).get("/api/v1/courses");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 2,
+			limit: 100,
+			offset: 0,
+			items: [
+				{
+					id: "cpsc210",
+					title: "Software Construction",
+					dept: "Computer Science",
+					code: "210",
+					links: {
+						self: "/api/v1/courses/cpsc210",
+						sections: `/api/v1/courses/cpsc210/sections`,
+					},
+				},
+				{
+					id: "cpsc310",
+					title: "Introduction to Software Engineering",
+					dept: "Computer Science",
+					code: "310",
+					links: {
+						self: "/api/v1/courses/cpsc310",
+						sections: `/api/v1/courses/cpsc310/sections`,
+					},
+				},
+			],
+		});
+	});
+	it("33: GET /api/v1/courses should return results in stable order w pagination.", async () => {
+		await request(app).put("/api/v1/courses/cpsc210").send({
+			title: "Software Construction",
+			dept: "Computer Science",
+			code: "210",
+		});
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/weeb123").send({
+			title: "Introduction to Asian Media",
+			dept: "Asian Studies",
+			code: "123",
+		});
+
+		const res = await request(app).get("/api/v1/courses?limit=1&offset=1");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 3,
+			limit: 1,
+			offset: 1,
+			items: [
+				{
+					id: "cpsc310",
+					title: "Introduction to Software Engineering",
+					dept: "Computer Science",
+					code: "310",
+					links: {
+						self: "/api/v1/courses/cpsc310",
+						sections: `/api/v1/courses/cpsc310/sections`,
+					},
+				},
+			],
+		});
+	});
 });
