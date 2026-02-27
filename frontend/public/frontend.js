@@ -1,11 +1,6 @@
 
 let departments = [];
 window.addEventListener("DOMContentLoaded", async () => {
-	const res = await fetch("/api/v1/courses");
-	const courses = await res.json();
-
-
-window.addEventListener("DOMContentLoaded", async () => {
     // UPLOAD BUTTON THINGS
     const uploadLoc = document.getElementById("uploadLocation");
 
@@ -16,12 +11,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const uploadBtn = document.createElement("button"); // BUTTON
     uploadBtn.textContent = "Upload Datset";
-    uploadBtn.style.marginLeft = "10px"; 
+    uploadBtn.style.marginLeft = "10px";
     uploadLoc.appendChild(uploadBtn);
 
     const statusDiv = document.createElement("div"); // STATUS (ai gen)
     statusDiv.style.marginTop = "10px";
-    statusDiv.style.marginLeft = "10px"; 
+    statusDiv.style.marginLeft = "10px";
     statusDiv.style.fontWeight = "bold";
     statusDiv.style.color = "black";
     uploadLoc.appendChild(statusDiv); // end of ai gen
@@ -31,12 +26,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
-        if (!file) return; 
+        if (!file) return;
 
         // ai gen
         const formData = new FormData();
         formData.append("archive", file);
-        formData.append("kind", "course_offerings"); 
+        formData.append("kind", "course_offerings");
         // end ai gen
 
         const res = await fetch("/api/v1/datasets", {
@@ -64,24 +59,17 @@ window.addEventListener("DOMContentLoaded", async () => {
         pollComplete(datasetId, statusDiv);
     });
 
-    const res = await fetch("/api/v1/courses");
+    const res = await fetch("/api/v1/courses?limit=5000");
 	const courses = await res.json();
 
 	document.body.appendChild(document.createElement("br"));
 
 	for (const course of courses.items) {
-		const res2 = await fetch(`/api/v1/courses/${course.id}/sections`);
+		const res2 = await fetch(`/api/v1/courses/${course.id}/sections?limit=5000`);
 		let sections = await res2.json();
 		for (const section of sections.items) {
 			document.getElementById("myTable").appendChild(createSectionRow(course, section)); // appends to page
 		}
-	}
-
-	for (const department of departments) {
-		let newElement = document.createElement("option");
-		newElement.textContent = department;
-		newElement.value = department;
-		document.getElementById("deptSelect").appendChild(newElement);
 	}
 });
 
@@ -279,7 +267,7 @@ async function applyInstructorFilter() {
 	}
 }
 
-    
+
 
 async function pollComplete(id, statusDiv) {
 
@@ -294,7 +282,7 @@ async function pollComplete(id, statusDiv) {
 
         if (dataset.status === "completed") {
             clearInterval(interval);
-
+			await refreshTableAndDepts();
             statusDiv.innerHTML = `
                 Upload Status: Processing Complete! <br>
                 Courses added: ${dataset.stats.courses_added} <br>
@@ -310,4 +298,39 @@ async function pollComplete(id, statusDiv) {
         }
 
     }, 1000); // every 1 second
+}
+async function refreshTableAndDepts() {
+	const res = await fetch("/api/v1/courses?limit=5000");
+	const courses = await res.json();
+
+	// Clear the current table (keeping headers)
+	const table = document.getElementById("myTable");
+	while (table.rows.length > 1) {
+		table.deleteRow(1);
+	}
+
+	// Reset departments array so we don't get duplicates
+	departments = [];
+
+	// Re-populate table and departments array
+
+	for (const course of courses.items) {
+		const res2 = await fetch(`/api/v1/courses/${course.id}/sections?limit=5000`);
+		let sections = await res2.json();
+		for (const section of sections.items) {
+			table.appendChild(createSectionRow(course, section));
+		}
+	}
+	for (const course of courses.items) {
+		if (!departments.includes(course.dept)) {
+			departments.push(course.dept);
+		}
+	}
+	document.getElementById("deptSelect").replaceChildren();
+	for (const department of departments) {
+		let newElement = document.createElement("option");
+		newElement.textContent = department;
+		newElement.value = department;
+		document.getElementById("deptSelect").appendChild(newElement);
+	}
 }
