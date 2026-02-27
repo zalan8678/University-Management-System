@@ -457,8 +457,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 5
 	app.get("/api/v1/courses", (req, res) => {
 		// get courses
-		const limit = parseInt(req.query.limit as string) || 100; // default 100
-		const offset = parseInt(req.query.offset as string) || 0; // default 0
+		const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string) : 100; // ai gen'd line
+		const offset = req.query.offset !== undefined ? parseInt(req.query.offset as string) : 0; // also ai gen'd line
 		if (offset < 0 || limit < 1 || limit > 5000) {
 			// Genereated by AI
 			let params: Record<string, string> = {};
@@ -618,8 +618,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
-		const limit = parseInt(req.query.limit as string) || 100; // default 100
-		const offset = parseInt(req.query.offset as string) || 0; // default 0
+		const limit = req.query.limit !== undefined ? parseInt(req.query.limit as string) : 100; // ai gen
+		const offset = req.query.offset !== undefined ? parseInt(req.query.offset as string) : 0; // also ai gen
+
 		if (offset < 0 || limit < 1 || limit > 5000) {
 			res.status(400).send({
 				error: "Invalid request parameters",
