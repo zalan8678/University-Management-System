@@ -191,7 +191,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 
 				let actualYear;
-				if (section.Year === "overall") {
+				if (section.Section === "overall") {
 					actualYear = 1900;
 				} else {
 					actualYear = Number(section.Year);
