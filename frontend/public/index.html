@@ -33,6 +33,27 @@
 			<th onclick="sortByAttribute('avg')">Avg</th>
 		</tr>
 	</table>
-		<script type="text/javascript" src="/frontend.js"></script>
+	<button onclick = "openInstructorModal()">Advanced Search</button>
+	<!-- Start of AI Code -->
+	<div id="instructorModal" style="display:none; position:fixed; z-index:1; left:0; top:0; width:100%; height:100%; background-color: rgba(0,0,0,0.5);">
+		<div style="background-color:white; margin:15% auto; padding:20px; width:300px; border-radius:8px;">
+			<label for="instructorInput">Filter by Instructor</label>
+			<p>Use * for wildcards (e.g., *Kiczales*)</p>
+			<input type="text" id="instructorInput" placeholder="Enter instructor name...">
+			<br><br>
+			<button onclick="applyInstructorFilter()">Apply Filter</button>
+			<button onclick="closeModal()">Cancel</button>
+			<div id="filterSection">
+				<label for="deptSelect">Filter by Departments (Hold Ctrl/Cmd to select multiple):</label><br>
+				<select id="deptSelect" multiple size="5" style="width: 200px;">
+				</select>
+				<br>
+				<button onclick="applyMultiDeptFilter()">Apply Filter</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- End of AI Code -->
+	<script type="text/javascript" src="/frontend.js"></script>
 	</body>
 </html>
