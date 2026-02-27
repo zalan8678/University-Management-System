@@ -589,7 +589,7 @@ describe("REST API v1", function () {
 			],
 		});
 	});
-	it("18: GET /api/v1/courses/cpsc310/sections/21w201 should respond with status OK and body 1 course and descriptors for given properties", async () => {
+	it("18: GET /api/v1/courses/cpsc310/sections/ should respond with status OK and body 1 course and descriptors for given properties", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
@@ -1418,7 +1418,7 @@ describe("REST API v1", function () {
 			{ dept: "Asian Studies", avg: 96 },
 		]);
 	});
-	it("28: GET /api/v1/courses/cpsc310/sections/2021 should respond with status OK and body section", async () => {
+	it("28: GET /api/v1/courses with pagination should respond with status OK and body courses", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
 			title: "Introduction to Software Engineering",
 			dept: "Computer Science",
@@ -1677,6 +1677,72 @@ describe("REST API v1", function () {
 					},
 				},
 			],
+		});
+	});
+	it("34: GET /api/v1/courses/{course} should respond with status OK and body course data", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		const res = await request(app).get("/api/v1/courses/cpsc310");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "cpsc310",
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+			links: {
+				self: "/api/v1/courses/cpsc310",
+				sections: `/api/v1/courses/cpsc310/sections`,
+			},
+		});
+	});
+	it("35: GET /api/v1/courses/{course}/sections/2021w1 should respond with status OK and body section data", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Sciences",
+			code: "310",
+		});
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put(`/api/v1/courses/cpsc310/sections/2021w1`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		const res = await request(app).get("/api/v1/courses/cpsc310");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "cpsc310",
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+			links: {
+				self: "/api/v1/courses/cpsc310",
+				sections: `/api/v1/courses/cpsc310/sections`,
+			},
+		});
+		const res2 = await request(app).get("/api/v1/courses/cpsc310/sections/2021w1");
+		expect(res2).to.have.property("status", OK);
+		expect(res2).to.have.deep.property("body", {
+			id: "2021w1",
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+			links: {
+				self: `/api/v1/courses/cpsc310/sections/2021w1`,
+				course: "/api/v1/courses/cpsc310",
+			},
 		});
 	});
 });

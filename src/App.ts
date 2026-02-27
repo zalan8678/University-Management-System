@@ -468,7 +468,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	app.get("/api/v1/courses/:courseId", (req, res) => {
 		// get course
 		const course = model.getCourseById(req.params.courseId);
-		console.log(course);
 		if (!course) {
 			res.status(404).send({
 				error: "Not found",
