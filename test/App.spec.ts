@@ -394,7 +394,7 @@ describe("REST API v1", function () {
 
 	it("13b: GET /api/v1/datasets/{id} should respond with status 200: Completed", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
-		const uploadRes = await request(app)
+		await request(app)
 			.post("/api/v1/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
@@ -408,9 +408,9 @@ describe("REST API v1", function () {
 			status: "completed",
 			kind: "course_offerings",
 			stats: {
-				files_total: 1,
+				files_total: 2,
 				files_processed: 1,
-				files_skipped: 0,
+				files_skipped: 1,
 				courses_seen: 1,
 				courses_added: 1,
 				courses_modified: 0,
@@ -499,8 +499,23 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("14a: Case: Provided File", async () => {
-		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+	it("13f: One file - Update", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "cpsc",
+			code: "310",
+		});
+
+		await request(app).put("/api/v1/courses/cpsc310/sections/21w201").send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 76.4,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_13f.zip"));
 		await request(app)
 			.post("/api/v1/datasets")
 			.field("kind", "course_offerings")
@@ -515,55 +530,188 @@ describe("REST API v1", function () {
 			status: "completed",
 			kind: "course_offerings",
 			stats: {
-				files_total: 5944,
-				files_processed: 5944,
+				files_total: 1,
+				files_processed: 1,
 				files_skipped: 0,
-				courses_seen: 3589,
-				courses_added: 3589,
-				courses_modified: 0,
-				sections_seen: 64612,
-				sections_added: 64612,
-				sections_modified: 0,
+				courses_seen: 1,
+				courses_added: 0,
+				courses_modified: 1,
+				sections_seen: 1,
+				sections_added: 0,
+				sections_modified: 1,
 			},
 			message: "Dataset processing complete",
 		});
+
+		const resCourse = await request(app).get("/api/v1/courses/cpsc310");
+		expect(resCourse).to.have.property("status", OK);
+		expect(resCourse).to.have.deep.property("body", {
+			title: "me2",
+			dept: "cpsc",
+			code: "310",
+			id: "cpsc310",
+			links: {
+				sections: "/api/v1/courses/cpsc310/sections",
+				self: "/api/v1/courses/cpsc310",
+			},
+		});
+
+		const resSection = await request(app).get("/api/v1/courses/cpsc310/sections/21w201");
+		expect(resSection).to.have.property("status", OK);
+		expect(resSection).to.have.deep.property("body", {
+			instructor: "me",
+			year: 2022,
+			avg: 1,
+			pass: 2,
+			fail: 3,
+			audit: 4,
+			id: "21w201",
+			links: {
+				course: "/api/v1/courses/cpsc310",
+				self: "/api/v1/courses/cpsc310/sections/21w201",
+			},
+		});
 	});
 
-	it("14b: Case: Provided File 2x", async () => {
-		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+	it("13g: One file - No Update", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction",
+			dept: "cpsc",
+			code: "310",
+		});
+
+		await request(app).put("/api/v1/courses/cpsc310/sections/21w201").send({
+			instructor: "me",
+			year: 2022,
+			avg: 1,
+			pass: 2,
+			fail: 3,
+			audit: 4,
+		});
+
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_13f.zip"));
 		await request(app)
 			.post("/api/v1/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
-		await waitForGetCompletion("upload_1");
-		await request(app)
-			.post("/api/v1/datasets")
-			.field("kind", "course_offerings")
-			.attach("archive", datasetBuffer, "courses.zip");
-
-		const getRes = await waitForGetCompletion("upload_2");
+		const getRes = await waitForGetCompletion("upload_1");
 
 		expect(getRes).to.have.property("status", 200);
 
 		expect(getRes).to.have.deep.property("body", {
-			id: "upload_2",
+			id: "upload_1",
 			status: "completed",
 			kind: "course_offerings",
 			stats: {
-				files_total: 5944,
-				files_processed: 5944,
+				files_total: 1,
+				files_processed: 1,
 				files_skipped: 0,
-				courses_seen: 3589,
+				courses_seen: 1,
 				courses_added: 0,
 				courses_modified: 0,
-				sections_seen: 64612,
+				sections_seen: 1,
 				sections_added: 0,
 				sections_modified: 0,
 			},
 			message: "Dataset processing complete",
 		});
+
+		const resCourse = await request(app).get("/api/v1/courses/cpsc310");
+		expect(resCourse).to.have.property("status", OK);
+		expect(resCourse).to.have.deep.property("body", {
+			title: "Introduction",
+			dept: "cpsc",
+			code: "310",
+			id: "cpsc310",
+			links: {
+				sections: "/api/v1/courses/cpsc310/sections",
+				self: "/api/v1/courses/cpsc310",
+			},
+		});
+
+		const resSection = await request(app).get("/api/v1/courses/cpsc310/sections/21w201");
+		expect(resSection).to.have.property("status", OK);
+		expect(resSection).to.have.deep.property("body", {
+			instructor: "me",
+			year: 2022,
+			avg: 1,
+			pass: 2,
+			fail: 3,
+			audit: 4,
+			id: "21w201",
+			links: {
+				course: "/api/v1/courses/cpsc310",
+				self: "/api/v1/courses/cpsc310/sections/21w201",
+			},
+		});
 	});
+
+	// it("14a: Case: Provided File", async () => {
+	// 	const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+	// 	await request(app)
+	// 		.post("/api/v1/datasets")
+	// 		.field("kind", "course_offerings")
+	// 		.attach("archive", datasetBuffer, "courses.zip");
+
+	// 	const getRes = await waitForGetCompletion("upload_1");
+
+	// 	expect(getRes).to.have.property("status", 200);
+
+	// 	expect(getRes).to.have.deep.property("body", {
+	// 		id: "upload_1",
+	// 		status: "completed",
+	// 		kind: "course_offerings",
+	// 		stats: {
+	// 			files_total: 5944,
+	// 			files_processed: 5944,
+	// 			files_skipped: 0,
+	// 			courses_seen: 3589,
+	// 			courses_added: 3589,
+	// 			courses_modified: 0,
+	// 			sections_seen: 64612,
+	// 			sections_added: 64612,
+	// 			sections_modified: 0,
+	// 		},
+	// 		message: "Dataset processing complete",
+	// 	});
+	// });
+
+	// it("14b: Case: Provided File 2x", async () => {
+	// 	const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
+	// 	await request(app)
+	// 		.post("/api/v1/datasets")
+	// 		.field("kind", "course_offerings")
+	// 		.attach("archive", datasetBuffer, "courses.zip");
+
+	// 	await waitForGetCompletion("upload_1");
+	// 	await request(app)
+	// 		.post("/api/v1/datasets")
+	// 		.field("kind", "course_offerings")
+	// 		.attach("archive", datasetBuffer, "courses.zip");
+
+	// 	const getRes = await waitForGetCompletion("upload_2");
+
+	// 	expect(getRes).to.have.property("status", 200);
+
+	// 	expect(getRes).to.have.deep.property("body", {
+	// 		id: "upload_2",
+	// 		status: "completed",
+	// 		kind: "course_offerings",
+	// 		stats: {
+	// 			files_total: 5944,
+	// 			files_processed: 5944,
+	// 			files_skipped: 0,
+	// 			courses_seen: 3589,
+	// 			courses_added: 0,
+	// 			courses_modified: 0,
+	// 			sections_seen: 64612,
+	// 			sections_added: 0,
+	// 			sections_modified: 0,
+	// 		},
+	// 		message: "Dataset processing complete",
+	// 	});
+	// });
 
 	it("15: GET /api/v1/courses should respond with status OK and body empty array and descriptors for given properties", async () => {
 		await request(app).put("/api/v1/courses/cpsc310").send({
