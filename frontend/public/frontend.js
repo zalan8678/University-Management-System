@@ -1,8 +1,8 @@
 
-let departments = [];
-window.addEventListener("DOMContentLoaded", async () => {
-	const res = await fetch("/api/v1/courses");
-	const courses = await res.json();
+// let departments = [];
+// window.addEventListener("DOMContentLoaded", async () => {
+// 	const res = await fetch("/api/v1/courses");
+// 	const courses = await res.json();
 
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -32,6 +32,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
         if (!file) return; 
+
+        fileInput.value = "";
 
         // ai gen
         const formData = new FormData();
