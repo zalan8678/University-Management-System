@@ -1,7 +1,6 @@
 
-
 let departments = [];
-
+let whereClause = {};
 window.addEventListener("DOMContentLoaded", async () => {
     // UPLOAD BUTTON THINGS
     const uploadLoc = document.getElementById("uploadLocation");
@@ -29,8 +28,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
         if (!file) return;
-
-        fileInput.value = "";
 
         // ai gen
         const formData = new FormData();
@@ -119,24 +116,42 @@ function createSectionRow(course, section) {
 }
 
 async function sortByAttribute(attribute) {
-	const req = await fetch(`/api/v1/search`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json"
-		},
-		body: JSON.stringify({
-			kind: "course_offerings",
-			query: {
-				WHERE: {
-					IS: {dept: "*"},
-				},
-				OPTIONS: {
-					COLUMNS: ["dept", "code", "title", "year", "instructor", "avg"],
-					ORDER: attribute,
-				},
+	let req = null;
+	if (whereClause !== {}) {
+		req = await fetch(`/api/v1/search`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
 			},
-		}),
-	});
+			body: JSON.stringify({
+				kind: "course_offerings",
+				query: {
+					WHERE: whereClause,
+					OPTIONS: {
+						COLUMNS: ["dept", "code", "title", "year", "instructor", "avg"],
+						ORDER: attribute,
+					},
+				},
+			}),
+		});
+	} else {
+		req = await fetch(`/api/v1/search`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json"
+			},
+			body: JSON.stringify({
+				kind: "course_offerings",
+				query: {
+					WHERE: {dept: "*"},
+					OPTIONS: {
+						COLUMNS: ["dept", "code", "title", "year", "instructor", "avg"],
+						ORDER: attribute,
+					},
+				},
+			}),
+		});
+	}
 	const result = await req.json();
 	const parentElement = document.getElementById("myTable");
 	while (parentElement.children.length > 1) {
@@ -192,7 +207,7 @@ async function applyMultiDeptFilter() {
 	// Get all selected options as an array of strings
 	const selectedValues = Array.from(select.selectedOptions).map(option => option.value);
 
-	let whereClause = {};
+	whereClause = {};
 
 	if (selectedValues.length === 0) {
 		// If nothing is selected, show everything
@@ -240,7 +255,7 @@ async function applyMultiDeptFilter() {
 async function applyInstructorFilter() {
 	const select = document.getElementById("instructorInput");
 	const instructorName = select.value.trim();
-	let whereClause = {};
+	whereClause = {};
 
 	if (instructorName.length > 0) {
 		// If nothing is selected, show everything
