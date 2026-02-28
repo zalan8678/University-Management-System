@@ -23,6 +23,7 @@
 	</style>
 	<body>
     <div id="uploadLocation"></div>
+	<button onclick = "openInstructorModal()">Advanced Search</button>
 	<table id="myTable">
 		<tr>
 			<!--When a header is clicked, run the sortTable function, with a parameter, 0 for sorting by names, 1 for sorting by country:-->
@@ -34,7 +35,6 @@
 			<th onclick="sortByAttribute('avg')">Avg</th>
 		</tr>
 	</table>
-	<button onclick = "openInstructorModal()">Advanced Search</button>
 	<!-- Start of AI Code -->
 	<div id="instructorModal" style="display:none; position:fixed; z-index:1; left:0; top:0; width:100%; height:100%; background-color: rgba(0,0,0,0.5);">
 		<div style="background-color:white; margin:15% auto; padding:20px; width:300px; border-radius:8px;">
@@ -51,10 +51,16 @@
 				<br>
 				<button onclick="applyMultiDeptFilter()">Apply Filter</button>
 			</div>
+			<!-- End of AI Code -->
+			<label for="yearInput">Filter by year</label>
+			<br>
+			<input type="number" id="yearInput" placeholder="Enter starting year here">
+			<input type="number" id="yearInputEnd" placeholder="Enter ending year here">
+			<br>
+			<button onclick="applyYearFilter()">Apply Filter</button>
 		</div>
 	</div>
 
-	<!-- End of AI Code -->
-	<script type="text/javascript" src="/frontend.js"></script>
 	</body>
+	<script type="text/javascript" src="/frontend.js"></script>
 </html>

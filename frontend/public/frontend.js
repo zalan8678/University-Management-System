@@ -1,9 +1,6 @@
 
-// let departments = [];
-// window.addEventListener("DOMContentLoaded", async () => {
-// 	const res = await fetch("/api/v1/courses");
-// 	const courses = await res.json();
 
+let departments = [];
 
 window.addEventListener("DOMContentLoaded", async () => {
     // UPLOAD BUTTON THINGS
@@ -16,12 +13,12 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     const uploadBtn = document.createElement("button"); // BUTTON
     uploadBtn.textContent = "Upload Datset";
-    uploadBtn.style.marginLeft = "10px"; 
+    uploadBtn.style.marginLeft = "10px";
     uploadLoc.appendChild(uploadBtn);
 
     const statusDiv = document.createElement("div"); // STATUS (ai gen)
     statusDiv.style.marginTop = "10px";
-    statusDiv.style.marginLeft = "10px"; 
+    statusDiv.style.marginLeft = "10px";
     statusDiv.style.fontWeight = "bold";
     statusDiv.style.color = "black";
     uploadLoc.appendChild(statusDiv); // end of ai gen
@@ -31,14 +28,14 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
-        if (!file) return; 
+        if (!file) return;
 
         fileInput.value = "";
 
         // ai gen
         const formData = new FormData();
         formData.append("archive", file);
-        formData.append("kind", "course_offerings"); 
+        formData.append("kind", "course_offerings");
         // end ai gen
 
         const res = await fetch("/api/v1/datasets", {
@@ -66,19 +63,18 @@ window.addEventListener("DOMContentLoaded", async () => {
         pollComplete(datasetId, statusDiv);
     });
 
-    const res = await fetch("/api/v1/courses");
+    const res = await fetch("/api/v1/courses?limit=5000");
 	const courses = await res.json();
 
 	document.body.appendChild(document.createElement("br"));
 
 	for (const course of courses.items) {
-		const res2 = await fetch(`/api/v1/courses/${course.id}/sections`);
+		const res2 = await fetch(`/api/v1/courses/${course.id}/sections?limit=5000`);
 		let sections = await res2.json();
 		for (const section of sections.items) {
 			document.getElementById("myTable").appendChild(createSectionRow(course, section)); // appends to page
 		}
 	}
-
 	for (const department of departments) {
 		let newElement = document.createElement("option");
 		newElement.textContent = department;
@@ -132,7 +128,7 @@ async function sortByAttribute(attribute) {
 			kind: "course_offerings",
 			query: {
 				WHERE: {
-					IS: { dept: "*" },
+					IS: {dept: "*"},
 				},
 				OPTIONS: {
 					COLUMNS: ["dept", "code", "title", "year", "instructor", "avg"],
@@ -150,7 +146,6 @@ async function sortByAttribute(attribute) {
 		document.getElementById("myTable").appendChild(createSectionRow2(queryResult));
 	}
 }
-
 function createSectionRow2(section) {
 	const tr = document.createElement("tr");
 
@@ -241,7 +236,6 @@ async function applyMultiDeptFilter() {
 	}
 	closeModal();
 }
-// End of AI Code
 
 async function applyInstructorFilter() {
 	const select = document.getElementById("instructorInput");
@@ -280,11 +274,10 @@ async function applyInstructorFilter() {
 		closeModal();
 	}
 }
+// End of AI Code
 
-    
 
 async function pollComplete(id, statusDiv) {
-
     // interval related components in this function is ai generated
     const interval = setInterval(async () => {
         const res = await fetch(`/api/v1/datasets/${id}`);
@@ -296,7 +289,7 @@ async function pollComplete(id, statusDiv) {
 
         if (dataset.status === "completed") {
             clearInterval(interval);
-
+			await refreshTableAndDepts();
             statusDiv.innerHTML = `
                 Upload Status: Processing Complete! <br>
                 Courses added: ${dataset.stats.courses_added} <br>
@@ -312,4 +305,88 @@ async function pollComplete(id, statusDiv) {
         }
 
     }, 1000); // every 1 second
+}
+// Start of AI Code
+async function refreshTableAndDepts() {
+	const res = await fetch("/api/v1/courses?limit=5000");
+	const courses = await res.json();
+
+	// Clear the current table (keeping headers)
+	const table = document.getElementById("myTable");
+	while (table.rows.length > 1) {
+		table.deleteRow(1);
+	}
+
+	// Reset departments array so we don't get duplicates
+	departments = [];
+
+	// Re-populate table and departments array
+
+	for (const course of courses.items) {
+		const res2 = await fetch(`/api/v1/courses/${course.id}/sections?limit=5000`);
+		let sections = await res2.json();
+		for (const section of sections.items) {
+			table.appendChild(createSectionRow(course, section));
+		}
+	}
+	for (const course of courses.items) {
+		if (!departments.includes(course.dept)) {
+			departments.push(course.dept);
+		}
+	}
+	document.getElementById("deptSelect").replaceChildren();
+	for (const department of departments) {
+		let newElement = document.createElement("option");
+		newElement.textContent = department;
+		newElement.value = department;
+		document.getElementById("deptSelect").appendChild(newElement);
+	}
+}
+// End of AI Code
+async function applyYearFilter(){
+	const select = document.getElementById("yearInput");
+	const startYear = parseInt(select.value);
+	const select2 = document.getElementById("yearInputEnd");
+	const endYear = parseInt(select2.value);
+	let whereClause = {};
+	// If nothing is selected, show everything
+	if (Number.isNaN(startYear)) {
+		if (Number.isNaN(endYear)) {
+			whereClause = { IS: { "instructor": "*" } };
+		} else {
+			whereClause = { LT: { "year": endYear } };
+		}
+	}
+	else if (Number.isNaN(endYear)) {
+		whereClause = { GT: { "year": startYear } };
+	} else {
+		whereClause = { AND: [{ GT: { "year": startYear } }, { LT: { "year": endYear } }] };
+	}
+		// Reuse your search logic
+		const req = await fetch(`/api/v1/search`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				kind: "course_offerings",
+				query: {
+					WHERE: whereClause,
+					OPTIONS: {
+						COLUMNS: ["dept", "code", "title", "year", "instructor", "avg"],
+						ORDER: "dept",
+					},
+				},
+			}),
+		});
+
+		const result = await req.json();
+
+		// Clear and redraw table
+		const table = document.getElementById("myTable");
+		while (table.children.length > 1) {
+			table.removeChild(table.lastChild);
+		}
+		for (const queryResult of result) {
+			document.getElementById("myTable").appendChild(createSectionRow2(queryResult));
+		}
+		closeModal();
 }
