@@ -363,7 +363,7 @@ async function applyYearFilter(){
 	const startYear = parseInt(select.value);
 	const select2 = document.getElementById("yearInputEnd");
 	const endYear = parseInt(select2.value);
-	let whereClause = {};
+	whereClause = {};
 	// If nothing is selected, show everything
 	if (Number.isNaN(startYear)) {
 		if (Number.isNaN(endYear)) {
