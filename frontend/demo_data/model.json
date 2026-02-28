@@ -5,54 +5,33 @@
 			"title": "Introduction to Software Engineering",
 			"dept": "CPSC",
 			"code": "310",
-			"sectionIds": ["310-001", "310-002"]
+			"sectionIds": ["001", "002"]
 		},
 		{
 			"id": "cpsc210",
 			"title": "Software Construction",
 			"dept": "CPSC",
 			"code": "210",
-			"sectionIds": ["210-101", "210-102"]
+			"sectionIds": ["101", "102"]
 		},
 		{
 			"id": "cpsc110",
 			"title": "Computation, Programs, and Programming",
 			"dept": "CPSC",
 			"code": "110",
-			"sectionIds": ["110-101", "110-102", "110-103"]
+			"sectionIds": ["101", "102", "103"]
 		},
 		{
 			"id": "math101",
 			"title": "Integral Calculus",
 			"dept": "MATH",
 			"code": "101",
-			"sectionIds": ["m101-201", "m101-202"]
-		},
-		{
-			"id": "biol121",
-			"title": "Genetics, Evolution and Ecology",
-			"dept": "BIOL",
-			"code": "121",
-			"sectionIds": ["b121-101", "b121-102"]
-		},
-		{
-			"id": "psyc101",
-			"title": "Introduction to Biological and Cognitive Psychology",
-			"dept": "PSYC",
-			"code": "101",
-			"sectionIds": ["p101-001", "p101-002"]
-		},
-		{
-			"id": "weeb167",
-			"title": "Introduction to Japanese Media",
-			"dept": "WEEB",
-			"code": "167",
-			"sectionIds": ["w167-101", "w167-102"]
+			"sectionIds": ["201", "202"]
 		}
 	],
 	"sections": [
 		{
-			"id": "310-001",
+			"id": "001",
 			"instructor": "Gregor Kiczales",
 			"year": 2023,
 			"avg": 85.4,
@@ -62,9 +41,9 @@
 			"courseId": "cpsc310"
 		},
 		{
-			"id": "310-002",
+			"id": "002",
 			"instructor": "Reid Holmes",
-			"year": 2023,
+			"year": 2022,
 			"avg": 82.1,
 			"pass": 110,
 			"fail": 6,
@@ -72,7 +51,7 @@
 			"courseId": "cpsc310"
 		},
 		{
-			"id": "210-101",
+			"id": "101",
 			"instructor": "Steve Wolfman",
 			"year": 2024,
 			"avg": 79.3,
@@ -82,7 +61,7 @@
 			"courseId": "cpsc210"
 		},
 		{
-			"id": "210-102",
+			"id": "102",
 			"instructor": "Cinda Heeren",
 			"year": 2024,
 			"avg": 81.5,
@@ -92,7 +71,7 @@
 			"courseId": "cpsc210"
 		},
 		{
-			"id": "110-101",
+			"id": "101",
 			"instructor": "Gregor Kiczales",
 			"year": 2025,
 			"avg": 74.2,
@@ -102,7 +81,7 @@
 			"courseId": "cpsc110"
 		},
 		{
-			"id": "110-102",
+			"id": "102",
 			"instructor": "Jessica Wong",
 			"year": 2025,
 			"avg": 76.8,
@@ -112,7 +91,7 @@
 			"courseId": "cpsc110"
 		},
 		{
-			"id": "110-103",
+			"id": "103",
 			"instructor": "Anthony Estey",
 			"year": 2025,
 			"avg": 75.1,
@@ -122,7 +101,7 @@
 			"courseId": "cpsc110"
 		},
 		{
-			"id": "m101-201",
+			"id": "201",
 			"instructor": "Elyse Yeager",
 			"year": 2024,
 			"avg": 68.9,
@@ -132,7 +111,7 @@
 			"courseId": "math101"
 		},
 		{
-			"id": "m101-202",
+			"id": "202",
 			"instructor": "Fok-Shuen Leung",
 			"year": 2024,
 			"avg": 70.2,
@@ -140,66 +119,6 @@
 			"fail": 45,
 			"audit": 4,
 			"courseId": "math101"
-		},
-		{
-			"id": "b121-101",
-			"instructor": "Diane Srivastava",
-			"year": 2023,
-			"avg": 77.5,
-			"pass": 180,
-			"fail": 12,
-			"audit": 1,
-			"courseId": "biol121"
-		},
-		{
-			"id": "b121-102",
-			"instructor": "William Milsom",
-			"year": 2023,
-			"avg": 78.9,
-			"pass": 175,
-			"fail": 8,
-			"audit": 2,
-			"courseId": "biol121"
-		},
-		{
-			"id": "p101-001",
-			"instructor": "James Enns",
-			"year": 2024,
-			"avg": 80.1,
-			"pass": 300,
-			"fail": 15,
-			"audit": 10,
-			"courseId": "psyc101"
-		},
-		{
-			"id": "p101-002",
-			"instructor": "Laura King",
-			"year": 2024,
-			"avg": 83.4,
-			"pass": 290,
-			"fail": 5,
-			"audit": 6,
-			"courseId": "psyc101"
-		},
-		{
-			"id": "w167-101",
-			"instructor": "Haruto Shimpo",
-			"year": 2024,
-			"avg": 67,
-			"pass": 59,
-			"fail": 9,
-			"audit": 9,
-			"courseId": "weeb167"
-		},
-		{
-			"id": "w167-102",
-			"instructor": "Alan Zhang",
-			"year": 2024,
-			"avg": 69,
-			"pass": 80,
-			"fail": 5,
-			"audit": 6,
-			"courseId": "weeb167"
 		}
 	]
 }
