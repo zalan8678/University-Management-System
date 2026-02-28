@@ -28,6 +28,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     fileInput.addEventListener("change", async () => {
         const file = fileInput.files[0];
         if (!file) return;
+        
+        fileInput.value = "";
 
         // ai gen
         const formData = new FormData();
