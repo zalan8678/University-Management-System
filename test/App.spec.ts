@@ -1960,4 +1960,122 @@ describe("REST API v1", function () {
 			},
 		});
 	});
+	it("36: GET /api/v2/buildings should respond with status OK and body empty array and descriptors", async () => {
+		// IN CLASS EXAMPLE
+		const res = await request(app).get("/api/v2/buildings");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			total: 0,
+			limit: 100,
+			offset: 0,
+			items: [],
+		});
+	});
+	it("37: PUT /api/v2/buildings/{building} should respond with status CREATED and body building data", async () => {
+		const res = await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		expect(res).to.have.property("status", CREATED);
+		expect(res).to.have.deep.property("body", {
+			id: "dmp",
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+			links: {
+				self: "/api/v2/buildings/dmp",
+				rooms: "/api/v2/buildings/dmp/rooms",
+			},
+		});
+	});
+	it("38: PUT /api/v2/buildings/{building} should respond with status 204", async () => {
+		// potential tests required for missing params when updating?
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		const res = await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26123,
+			lon: -123.24807,
+		});
+
+		expect(res).to.have.property("status", NO_CONTENT);
+		expect(res).to.have.deep.property("body", {});
+	});
+	it("39: DEL /api/v2/buildings/{building} should respond with status 200 and body course data", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		const res = await request(app).del("/api/v2/buildings/dmp");
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "dmp",
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+			rooms: 0,
+		});
+	});
+	it("40: PUT /api/v2/buildings/{building} should respond with status 422", async () => {
+		const res = await request(app).put("/api/v2/buildings/dmp").send({
+			address: 2,
+			lat: "3",
+		});
+		expect(res).to.have.property("status", 422);
+		expect(res).to.have.deep.property("body", {
+			error: "Validation failed",
+			fields: {
+				name: "required but missing",
+				address: "expected a string",
+				lat: "expected a number",
+				lon: "required but missing",
+			},
+		});
+	});
+	it("41: PUT /api/v2/buildings/{building}/rooms/{room} should respond with status CREATED and body room data", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		const res = await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			building: "DMP",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40
+		});
+
+		expect(res).to.have.property("status", CREATED);
+		expect(res).to.have.deep.property("body", {
+			id: "dmp101",
+			building: "dmp",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40,
+			links: {
+				self: "/api/v2/buildings/dmp/rooms/dmp101",
+				building: "/api/v2/buildings/dmp"
+			}
+		});
+	});
 });
