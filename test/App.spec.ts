@@ -2055,12 +2055,12 @@ describe("REST API v1", function () {
 		});
 
 		const res = await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
-			building: "DMP",
+			building: "dmp",
 			number: "101",
 			type: "Open Design General Purpose",
 			furniture: "Classroom-Movable Tables & Chairs",
 			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
-			seats: 40
+			seats: 40,
 		});
 
 		expect(res).to.have.property("status", CREATED);
@@ -2074,8 +2074,127 @@ describe("REST API v1", function () {
 			seats: 40,
 			links: {
 				self: "/api/v2/buildings/dmp/rooms/dmp101",
-				building: "/api/v2/buildings/dmp"
-			}
+				building: "/api/v2/buildings/dmp",
+			},
+		});
+	});
+	// Start of AI tests
+	it("42: PUT should overwrite existing room", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+		await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			building: "dmp",
+			number: "101",
+			type: "Lecture Theatre",
+			furniture: "Fixed Tables",
+			href: "test",
+			seats: 80,
+		});
+
+		const res = await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			building: "dmp",
+			number: "101",
+			type: "Lecture Theatre",
+			furniture: "Fixed Tables",
+			href: "test",
+			seats: 100,
+		});
+
+		expect(res).to.have.property("status", NO_CONTENT);
+		expect(res).to.have.deep.property("body", {});
+	});
+	it("43: PUT should reject invalid room body", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+		const res = await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			number: 101,
+			type: 123,
+			furniture: null,
+			href: 5,
+			seats: -1,
+		});
+
+		expect(res).to.have.property("status", 422);
+		expect(res).to.have.deep.property("body", {
+			error: "Validation failed",
+			fields: {
+				building: "required but missing",
+				number: "expected a string",
+				type: "expected a string",
+				furniture: "expected a string",
+				href: "expected a string",
+				seats: "expected a number >= 0",
+			},
+		});
+	});
+	it("44: GET /api/v2/buildings/{building}/rooms/{room} should respond with status OK and body room data", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			building: "dmp",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40,
+		});
+		const res = await request(app).get("/api/v2/buildings/dmp/rooms/dmp101");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "dmp101",
+			building: "dmp",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40,
+			links: {
+				self: "/api/v2/buildings/dmp/rooms/dmp101",
+				building: "/api/v2/buildings/dmp",
+			},
+		});
+	});
+	it("45: DELETE /api/v2/buildings/{building}/rooms/{room} should respond with status OK and body room data", async () => {
+		await request(app).put("/api/v2/buildings/dmp").send({
+			name: "Hugh Dempster Pavilion",
+			address: "6245 Agronomy Road V6T 1Z4",
+			lat: 49.26125,
+			lon: -123.24807,
+		});
+
+		await request(app).put("/api/v2/buildings/dmp/rooms/dmp101").send({
+			building: "dmp",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40,
+		});
+		const res = await request(app).delete("/api/v2/buildings/dmp/rooms/dmp101");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "dmp101",
+			building: "dmp",
+			number: "101",
+			type: "Open Design General Purpose",
+			furniture: "Classroom-Movable Tables & Chairs",
+			href: "http://students.ubc.ca/campus/discover/buildings-and-classrooms/room/DMP-101",
+			seats: 40,
 		});
 	});
 });
