@@ -9,6 +9,8 @@ import path from "path";
 export type Application = ReturnType<typeof express>;
 const mfields = ["avg", "pass", "fail", "audit", "year"];
 const sfields = ["title", "dept", "code", "instructor"];
+const mfieldsFacility = ["lat", "lon", "seats"];
+const sfieldsFacility = ["address", "building", "furniture", "href", "name", "number", "type"];
 /**
  * Configuration options for the application.
  */
@@ -885,6 +887,173 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			return;
 		}
 	});
+	app.post("/api/v2/search", async (req, res) => {
+		const { kind, query } = req.body ?? {};
+
+		// 1. Basic Validation
+		const fields: Record<string, string> = {};
+		if (kind === undefined) fields.kind = "required but missing";
+		else if (kind !== "course_offerings" && kind !== "facilities") {
+			fields.kind = "expected to be course_offerings or facilities";
+		}
+
+		if (query === undefined) fields.query = "required but missing";
+		else if (typeof query !== "object" || query === null) fields.query = "expected an object";
+
+		if (Object.keys(fields).length > 0) {
+			res.status(422).send({ error: "Validation failed", fields });
+			return;
+		}
+
+		try {
+			// 2. Validate and Execute Query
+			const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
+			const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
+
+			validateQueryV2(query, currentMFields, currentSFields);
+
+			const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
+			const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
+
+			if (results.length > 5000) {
+				res.status(413).send({
+					error: "Too many results",
+					message: "Query would return more than 5000 results",
+					limit: 5000,
+				});
+				return;
+			}
+
+			res.status(200).send(results);
+		} catch (err: any) {
+			res.status(400).send({ error: "Invalid query", message: err.message });
+		}
+	});
+
+	// --- V2 HELPER FUNCTIONS ---
+
+	function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
+		if (!query.WHERE) throw new Error("Missing WHERE");
+		if (!query.OPTIONS) throw new Error("Missing OPTIONS");
+		if (!query.OPTIONS.COLUMNS || !Array.isArray(query.OPTIONS.COLUMNS)) throw new Error("Missing COLUMNS");
+
+		const allValidKeys = [...mfs, ...sfs];
+
+		// Validation for Transformations
+		if (query.TRANSFORMATIONS) {
+			if (!query.TRANSFORMATIONS.GROUP || !Array.isArray(query.TRANSFORMATIONS.GROUP))
+				throw new Error("Missing GROUP in TRANSFORMATIONS");
+			if (!query.TRANSFORMATIONS.APPLY || !Array.isArray(query.TRANSFORMATIONS.APPLY))
+				throw new Error("Missing APPLY in TRANSFORMATIONS");
+
+			const applyKeys = query.TRANSFORMATIONS.APPLY.map((r: any) => Object.keys(r)[0]);
+			const groupKeys = query.TRANSFORMATIONS.GROUP;
+
+			for (const col of query.OPTIONS.COLUMNS) {
+				if (!groupKeys.includes(col) && !applyKeys.includes(col)) {
+					throw new Error("When TRANSFORMATIONS is present, all COLUMNS must be in GROUP or APPLY");
+				}
+			}
+		} else {
+			for (const col of query.OPTIONS.COLUMNS) {
+				if (!allValidKeys.includes(col)) throw new Error("Unknown key in COLUMNS");
+			}
+		}
+	}
+
+	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
+		// 1. Filter
+		let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
+
+		// 2. Transformations (Grouping & Aggregation)
+		let processed: any[];
+		if (query.TRANSFORMATIONS) {
+			processed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
+		} else {
+			processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
+		}
+
+		// 3. Sorting (Handle V1 string or V2 Sort Object)
+		if (query.OPTIONS.ORDER) {
+			const order = query.OPTIONS.ORDER;
+			const isV2Sort = typeof order === "object";
+			const direction = isV2Sort ? order.dir : "UP";
+			const keys = isV2Sort ? order.keys : [order];
+
+			processed.sort((a, b) => {
+				for (const key of keys) {
+					if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
+					if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
+				}
+				return 0;
+			});
+		}
+
+		return processed;
+	}
+
+	function performTransformations(data: any[], transformations: any, kind: string): any[] {
+		const groups = new Map<string, any[]>();
+		const { GROUP, APPLY } = transformations;
+
+		// Grouping
+		for (const item of data) {
+			const groupKey = GROUP.map((k: string) => {
+				const val =
+					kind === "course_offerings" && sfields.includes(k) && k !== "instructor"
+						? model.getCourseById(item.courseId)?.[k as keyof Course]
+						: item[k];
+				return val;
+			}).join("|");
+
+			if (!groups.has(groupKey)) groups.set(groupKey, []);
+			groups.get(groupKey)!.push(item);
+		}
+
+		// Aggregation
+		return Array.from(groups.values()).map((groupItems) => {
+			const result: any = {};
+			// Set Group Keys
+			GROUP.forEach((k: string) => {
+				result[k] =
+					kind === "course_offerings" && sfields.includes(k) && k !== "instructor"
+						? model.getCourseById(groupItems[0].courseId)?.[k as keyof Course]
+						: groupItems[0][k];
+			});
+
+			// Set Apply Keys
+			APPLY.forEach((rule: any) => {
+				const applyKey = Object.keys(rule)[0];
+				const entry = rule[applyKey];
+				const token = Object.keys(entry)[0];
+				const key = entry[token];
+				result[applyKey] = calculateAggregation(groupItems, token, key);
+			});
+
+			return result;
+		});
+	}
+
+	function calculateAggregation(items: any[], token: string, key: string): number {
+		const values = items.map((i) => i[key]);
+		switch (token) {
+			case "MAX":
+				return Math.max(...values);
+			case "MIN":
+				return Math.min(...values);
+			case "COUNT":
+				return new Set(values).size;
+			case "SUM":
+				return Number(values.reduce((a, b) => a + b, 0).toFixed(2));
+			case "AVG":
+				const avg = values.reduce((a, b) => a + b, 0) / values.length;
+				return Number(avg.toFixed(2));
+			default:
+				return 0;
+		}
+	}
+
+	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
 		if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
@@ -1088,6 +1257,62 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return row;
 	} // End of AI Code
+	function evaluateFilterV2(filter: any, item: any, kind: string): boolean {
+		if (Object.keys(filter).length === 0) return true;
+
+		const key = Object.keys(filter)[0];
+		const value = filter[key];
+
+		// Recursive Logic
+		if (key === "AND") return value.every((f: any) => evaluateFilterV2(f, item, kind));
+		if (key === "OR") return value.some((f: any) => evaluateFilterV2(f, item, kind));
+		if (key === "NOT") return !evaluateFilterV2(value, item, kind);
+
+		// Comparisons
+		const field = Object.keys(value)[0];
+		let actualValue: any;
+
+		if (kind === "course_offerings") {
+			// Look up parent Course if field is a course-level field
+			if (sfields.includes(field) && field !== "instructor") {
+				const course = model.getCourseById(item.courseId);
+				actualValue = course ? (course as any)[field] : "";
+			} else {
+				actualValue = item[field];
+			}
+		} else {
+			// Facilities fields are all contained within the Room object
+			actualValue = item[field];
+		}
+
+		if (key === "LT") return actualValue < value[field];
+		if (key === "GT") return actualValue > value[field];
+		if (key === "EQ") return actualValue === value[field];
+		if (key === "IS") return matchWildcard(String(actualValue), value[field]);
+
+		return false;
+	}
+
+	function projectRowV2(item: any, columns: string[], kind: string): any {
+		const row: any = {};
+
+		for (const col of columns) {
+			if (kind === "course_offerings") {
+				if (mfields.includes(col) || col === "instructor") {
+					row[col] = item[col];
+				} else {
+					// Fetch from Course model
+					const course = model.getCourseById(item.courseId);
+					row[col] = course ? (course as any)[col] : undefined;
+				}
+			} else {
+				// Facilities: mapping is direct from the Room object
+				row[col] = item[col];
+			}
+		}
+
+		return row;
+	}
 	// 5
 	app.get("/api/v2/buildings", (req, res) => {
 		// get courses
