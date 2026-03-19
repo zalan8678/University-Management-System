@@ -2569,5 +2569,157 @@ describe("REST API v1", function () {
 			{ type: "Small Room", totalSeats: 40 },
 		]);
 	});
+	it("53: POST /api/v2/search should respond with 400 if applykey contains an underscore", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {},
+					OPTIONS: {
+						COLUMNS: ["building", "max_seats"],
+					},
+					TRANSFORMATIONS: {
+						GROUP: ["building"],
+						APPLY: [
+							{ max_seats: { MAX: "seats" } }, // Underscores are illegal in EBNF [^_]+
+						],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("applykey cannot contain underscores");
+	});
+
+	it("54: POST /api/v2/search should respond with 400 if APPLY contains duplicate applykeys", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {},
+					OPTIONS: {
+						COLUMNS: ["building", "seatMetric"],
+					},
+					TRANSFORMATIONS: {
+						GROUP: ["building"],
+						APPLY: [
+							{ seatMetric: { MAX: "seats" } },
+							{ seatMetric: { MIN: "seats" } }, // Duplicate key is illegal
+						],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("Duplicate applykey found");
+	});
+
+	it("55: POST /api/v2/search should respond with 400 if MAX/MIN/AVG/SUM targets an sfield (string)", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {},
+					OPTIONS: {
+						COLUMNS: ["building", "maxType"],
+					},
+					TRANSFORMATIONS: {
+						GROUP: ["building"],
+						APPLY: [
+							{ maxType: { MAX: "type" } }, // 'type' is a string, MAX requires a numeric mfield
+						],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("must target a numeric field");
+	});
+
+	it("56: POST /api/v2/search should respond with 400 if ORDER keys are not present in COLUMNS", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {
+						GT: { seats: 100 },
+					},
+					OPTIONS: {
+						COLUMNS: ["building", "type"], // 'seats' is missing here
+						ORDER: {
+							dir: "UP",
+							keys: ["seats"], // Illegal because it's not in COLUMNS
+						},
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("must be in COLUMNS");
+	});
+
+	it("57: POST /api/v2/search should respond with 400 if fields from different datasets are mixed", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities", // Dataset is facilities
+				query: {
+					WHERE: {
+						GT: { avg: 90 }, // 'avg' belongs to course_offerings
+					},
+					OPTIONS: {
+						COLUMNS: ["building", "seats"],
+						ORDER: "seats",
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("targets an invalid mfield");
+	});
+
+	it("58: POST /api/v2/search should respond with 400 if a FILTER object has more than one key", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {
+						// Illegal: Two keys (GT and LT) inside the same logic block instead of inside an AND array
+						GT: { seats: 50 },
+						LT: { seats: 200 },
+					},
+					OPTIONS: {
+						COLUMNS: ["building", "seats"],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("must contain exactly one key");
+	});
+
+	it("59: POST /api/v2/search should respond with 400 if IS contains an asterisk in the middle of the string", async () => {
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {
+						IS: { building: "Hugh*Pavilion" }, // Illegal wildcard placement
+					},
+					OPTIONS: {
+						COLUMNS: ["building", "seats"],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", 400);
+		expect(res.body.message).to.include("asterisks can only be the first or last character");
+	});
 	// End of AI Code
 });
