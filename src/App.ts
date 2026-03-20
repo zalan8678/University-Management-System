@@ -401,7 +401,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 			try {
 				const encodedAddr = encodeURIComponent(building.address);
-				const geoRes = await fetch(`http://cs310.students.cs.ubc.ca:11316/api/v1/project_team<006>/${encodedAddr}`);
+				const geoRes = await fetch(`http://cs310.students.cs.ubc.ca:11316/api/v1/project_team006/${encodedAddr}`);
 				const geoData = (await geoRes.json()) as any; // parse
 
 				if (geoData.error || geoData.lat === undefined || geoData.lon === undefined) continue;
