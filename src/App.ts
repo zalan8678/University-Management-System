@@ -31,9 +31,11 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	const app = express();
 	const multer = require("multer");
 	const JSZip = require("jszip");
+	const parse5 = await import("parse5");
 	const upload = multer({ storage: multer.memoryStorage() });
 	let idCounter = 1;
-	const datasets = new Map<string, Dataset>(); // where string is the DatasetID
+	const datasetsC = new Map<string, DatasetC>(); // where string is the DatasetID
+	const datasetsF = new Map<string, DatasetF>(); // where string is the DatasetID
 
 	const { datadir } = config;
 
@@ -58,17 +60,17 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 
 	// test series 12
-	app.post("/api/v1/datasets", upload.single("archive"), async (req, res) => {
+	app.post("/api/v2/datasets", upload.single("archive"), async (req, res) => {
 		// REQUEST VALIDATION
-		const kind = req.body?.kind;
+		const kind = String(req.body?.kind);
 		const archive = req.file;
 
 		const fields: Record<string, string> = {}; // format is ai generated (and modified)
 
 		if (kind === undefined) {
 			fields.kind = "required but missing";
-		} else if (kind !== "course_offerings") {
-			fields.kind = "expected to be course_offerings";
+		} else if (kind !== "course_offerings" && kind !== "facilities") {
+			fields.kind = "expected to be course_offerings or facilities";
 		}
 
 		if (archive === undefined) {
@@ -89,46 +91,69 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		const id = `upload_${idCounter++}`; // incs idcounter after
 
-		const data: Dataset = {
-			// this line is ai gen'd
-			id,
-			kind,
-			status: "processing",
-			stats: {
-				files_total: 0,
-				files_processed: 0,
-				files_skipped: 0,
-				courses_seen: 0,
-				courses_added: 0,
-				courses_modified: 0,
-				sections_seen: 0,
-				sections_added: 0,
-				sections_modified: 0,
-			},
-			message: "Processing in progress",
-		};
+		if (kind == "course_offerings") {
+			const data: DatasetC = {
+				// this line is ai gen'd
+				id,
+				status: "processing",
+				kind: "course_offerings",
+				stats: {
+					files_total: 0,
+					files_processed: 0,
+					files_skipped: 0,
+					courses_seen: 0,
+					courses_added: 0,
+					courses_modified: 0,
+					sections_seen: 0,
+					sections_added: 0,
+					sections_modified: 0,
+				},
+				message: "Processing in progress",
+			};
 
-		datasets.set(id, data);
+			datasetsC.set(id, data);
+		} else {
+			const data: DatasetF = {
+				id,
+				status: "processing",
+				kind: "facilities",
+				stats: {
+					buildings_added: 0,
+					buildings_modified: 0,
+					rooms_added: 0,
+					rooms_modified: 0,
+				},
+				message: "Processing in progress",
+			};
+
+			datasetsF.set(id, data);
+		}
 
 		// PROCESS DATASET
 
 		res.status(202).send({
 			id: id,
 			status: "processing",
-			kind: "course_offerings",
+			kind: kind,
 			message: "Dataset accepted for processing",
 		});
 
 		if (archive) {
-			await processDataset(id, archive.buffer);
+			await processDataset(id, archive.buffer, kind);
 		}
 
 		// TEMP STATUS: PROCESSING
 		return;
 	});
 
-	async function processDataset(id: string, buffer: Buffer) {
-		let dataset = datasets.get(id);
+	async function processDataset(id: string, buffer: Buffer, kind: String) {
+		let dataset;
+		if (kind == "course_offerings") {
+			dataset = datasetsC.get(id);
+		} else if (kind == "facilities") {
+			dataset = datasetsF.get(id);
+		}
+
 		if (!dataset) {
 			return;
 		}
@@ -145,7 +170,47 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 
 		// CONTENT PROCESSING
+		if (kind == "course_offerings") {
+			await processCourse(dataset as DatasetC, zip);
+		} else if (kind == "facilities") {
+			await processFacilities(dataset as DatasetF, zip);
+		} else {
+			return; // error
+		}
 
+		try {
+			await model.writeModel();
+			dataset.status = "completed";
+			dataset.message = "Dataset processing complete";
+		} catch {
+			// for testing
+		}
+	}
+
+	// -- HELPER FUNCTIONS FOR POST DATASETS --
+	async function processFacilities(dataset: DatasetF, zip: any) {
+		// Validate index.htm
+		const indexFile = zip.file("index.htm");
+		if (!indexFile) {
+			dataset.status = "failed";
+			dataset.message = "Missing index.htm file";
+			return;
+		}
+
+		// Attempt parse (ai gen)
+		let root: any;
+		try {
+			const indexContent = await indexFile.async("string");
+			root = parse5.parse(indexContent);
+			if (!root) throw new Error();
+		} catch {
+			dataset.status = "failed";
+			dataset.message = "index.htm could not be parsed";
+			return;
+		}
+	}
+
+	async function processCourse(dataset: DatasetC, zip: any) {
 		const files = Object.values(zip.files).filter(
 			// start of ai gen
 			(file: any) => !file.dir && file.name.startsWith("courses/")
@@ -360,18 +425,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 			}
 		}
-
-		try {
-			await model.writeModel();
-
-			dataset.status = "completed";
-			dataset.message = "Dataset processing complete";
-		} catch {
-			// for testing
-		}
 	}
-
-	// -- HELPER FUNCTIONS FOR POST DATASETS --
 
 	function validateCourseInput(id: string, title: string, dept: string, code: string) {
 		if (title === undefined) {
@@ -441,8 +495,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// -- END HELPER FUNCTIONS FOR POST DATASET --
 	// test series 13
-	app.get("/api/v1/datasets/:id", (req, res) => {
-		const dataset = datasets.get(req.params.id);
+	app.get("/api/v2/datasets/:id", (req, res) => {
+		const dataset = datasetsC.get(req.params.id) ?? datasetsF.get(req.params.id);
 
 		if (!dataset) {
 			// validation
@@ -2123,7 +2177,7 @@ export interface Room {
 	seats: number;
 }
 
-export interface Dataset {
+export interface DatasetC {
 	id: string;
 	status: "processing" | "completed" | "failed";
 	kind: string;
@@ -2137,6 +2191,19 @@ export interface Dataset {
 		sections_seen: number;
 		sections_added: number;
 		sections_modified: number;
+	};
+	message: string;
+}
+
+export interface DatasetF {
+	id: string;
+	status: "processing" | "completed" | "failed";
+	kind: string;
+	stats: {
+		buildings_added: number;
+		buildings_modified: number;
+		rooms_added: number;
+		rooms_modified: number;
 	};
 	message: string;
 }
