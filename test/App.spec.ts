@@ -288,10 +288,10 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("12a: POST /api/v1/datasets should respond with status 202 and processing status", async () => {
+	it("12a: POST /api/v2/datasets should respond with status 202 and processing status", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -304,9 +304,9 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("12b: POST /api/v1/datasets should respond with status 422: kind/archive required but missing", async () => {
+	it("12b: POST /api/v2/datasets should respond with status 422: kind/archive required but missing", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
-		const uploadRes = await request(app).post("/api/v1/datasets");
+		const uploadRes = await request(app).post("/api/v2/datasets");
 
 		expect(uploadRes).to.have.property("status", 422);
 		expect(uploadRes).to.have.deep.property("body", {
@@ -318,10 +318,10 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("12c: POST /api/v1/datasets should respond with status 422: expected to be course_offerings", async () => {
+	it("12c: POST /api/v2/datasets should respond with status 422: expected to be course_offerings", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "test")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -329,15 +329,15 @@ describe("REST API v1", function () {
 		expect(uploadRes).to.have.deep.property("body", {
 			error: "Validation failed",
 			fields: {
-				kind: "expected to be course_offerings",
+				kind: "expected to be course_offerings or facilities",
 			},
 		});
 	});
 
-	it("12d: POST /api/v1/datasets should respond with status 422: expected non-empty file", async () => {
+	it("12d: POST /api/v2/datasets should respond with status 422: expected non-empty file", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "empty.zip"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -355,7 +355,7 @@ describe("REST API v1", function () {
 		let res;
 		do {
 			await new Promise((r) => setTimeout(r, 200));
-			res = await request(app).get(`/api/v1/datasets/${id}`);
+			res = await request(app).get(`/api/v2/datasets/${id}`);
 		} while (res.body.status === "processing");
 
 		return res;
@@ -392,10 +392,10 @@ describe("REST API v1", function () {
 	// 	});
 	// });
 
-	it("13b: GET /api/v1/datasets/{id} should respond with status 200: Completed", async () => {
+	it("13b: GET /api/v2/datasets/{id} should respond with status 200: Completed", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -422,10 +422,10 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("13c: GET /api/v1/datasets/{id} should respond with status 200: Failed - Invalid ZIP", async () => {
+	it("13c: GET /api/v2/datasets/{id} should respond with status 200: Failed - Invalid ZIP", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "txtfile.txt"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -452,10 +452,10 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("13d: GET /api/v1/datasets/{id} should respond with status 200: Failed - Missing Root", async () => {
+	it("13d: GET /api/v2/datasets/{id} should respond with status 200: Failed - Missing Root", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "wrongfolder.zip"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -482,14 +482,14 @@ describe("REST API v1", function () {
 		});
 	});
 
-	it("13e: GET /api/v1/datasets/{id} should respond with status 404: Not Found", async () => {
+	it("13e: GET /api/v2/datasets/{id} should respond with status 404: Not Found", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_12a.zip"));
 		const uploadRes = await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
-		const getRes = await request(app).get("/api/v1/datasets/upload_2");
+		const getRes = await request(app).get("/api/v2/datasets/upload_2");
 
 		expect(getRes).to.have.property("status", 404);
 
@@ -517,7 +517,7 @@ describe("REST API v1", function () {
 
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_13f.zip"));
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -591,7 +591,7 @@ describe("REST API v1", function () {
 
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "test_13f.zip"));
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -650,7 +650,7 @@ describe("REST API v1", function () {
 	it("14a: Case: Provided File", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -680,13 +680,13 @@ describe("REST API v1", function () {
 	it("14b: Case: Provided File 2x", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "pair.zip"));
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
 		await waitForGetCompletion("upload_1");
 		await request(app)
-			.post("/api/v1/datasets")
+			.post("/api/v2/datasets")
 			.field("kind", "course_offerings")
 			.attach("archive", datasetBuffer, "courses.zip");
 
@@ -2722,4 +2722,60 @@ describe("REST API v1", function () {
 		expect(res.body.message).to.include("asterisks can only be the first or last character");
 	});
 	// End of AI Code
+
+	it("60: Case: Provided File (facilities)", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "campus.zip"));
+		await request(app)
+			.post("/api/v2/datasets")
+			.field("kind", "facilities")
+			.attach("archive", datasetBuffer, "campus.zip");
+
+		const getRes = await waitForGetCompletion("upload_1");
+
+		expect(getRes).to.have.property("status", 200);
+
+		expect(getRes).to.have.deep.property("body", {
+			id: "upload_1",
+			status: "completed",
+			kind: "facilities",
+			stats: {
+				buildings_added: 74,
+				buildings_modified: 0,
+				rooms_added: 363,
+				rooms_modified: 0,
+			},
+			message: "Dataset processing complete",
+		});
+	});
+
+	it("60b: Case: Provided File 2x", async () => {
+		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "campus.zip"));
+		await request(app)
+			.post("/api/v2/datasets")
+			.field("kind", "facilities")
+			.attach("archive", datasetBuffer, "campus.zip");
+
+		await waitForGetCompletion("upload_1");
+		await request(app)
+			.post("/api/v2/datasets")
+			.field("kind", "facilities")
+			.attach("archive", datasetBuffer, "campus.zip");
+
+		const getRes = await waitForGetCompletion("upload_2");
+
+		expect(getRes).to.have.property("status", 200);
+
+		expect(getRes).to.have.deep.property("body", {
+			id: "upload_2",
+			status: "completed",
+			kind: "facilities",
+			stats: {
+				buildings_added: 0,
+				buildings_modified: 0,
+				rooms_added: 0,
+				rooms_modified: 0,
+			},
+			message: "Dataset processing complete",
+		});
+	});
 });

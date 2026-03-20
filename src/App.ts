@@ -62,7 +62,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// test series 12
 	app.post("/api/v2/datasets", upload.single("archive"), async (req, res) => {
 		// REQUEST VALIDATION
-		const kind = String(req.body?.kind);
+		const kind = req.body?.kind;
 		const archive = req.file;
 
 		const fields: Record<string, string> = {}; // format is ai generated (and modified)
@@ -180,8 +180,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		try {
 			await model.writeModel();
-			dataset.status = "completed";
-			dataset.message = "Dataset processing complete";
+			if (dataset.status !== "failed") {
+				dataset.status = "completed";
+				dataset.message = "Dataset processing complete";
+			}
 		} catch {
 			// for testing
 		}
@@ -354,35 +356,37 @@ export async function createApp(config: AppConfig): Promise<Application> {
 					const roomContent = await roomFile.async("string");
 					const roomRoot = parse5.parse(roomContent);
 					const roomTable = findTable(roomRoot);
-					for (const row of getRows(roomTable)) {
-						try {
-							const numberCell = findByClass(row, "views-field-field-room-number");
-							const seatsCell = findByClass(row, "views-field-field-room-capacity");
-							const furnitureCell = findByClass(row, "views-field-field-room-furniture");
-							const typeCell = findByClass(row, "views-field-field-room-type");
-							const hrefCell = findByClass(row, "views-field-nothing");
+					if (roomTable) {
+						for (const row of getRows(roomTable)) {
+							try {
+								const numberCell = findByClass(row, "views-field-field-room-number");
+								const seatsCell = findByClass(row, "views-field-field-room-capacity");
+								const furnitureCell = findByClass(row, "views-field-field-room-furniture");
+								const typeCell = findByClass(row, "views-field-field-room-type");
+								const hrefCell = findByClass(row, "views-field-nothing");
 
-							if (!numberCell || !seatsCell || !furnitureCell || !typeCell || !hrefCell) {
-								continue;
-							} // skip
-							const numberAnchor = findFirst(numberCell, (n) => n.nodeName === "a");
-							const hrefAnchor = findFirst(hrefCell, (n) => n.nodeName === "a");
+								if (!numberCell || !seatsCell || !furnitureCell || !typeCell || !hrefCell) {
+									continue;
+								} // skip
+								const numberAnchor = findFirst(numberCell, (n) => n.nodeName === "a");
+								const hrefAnchor = findFirst(hrefCell, (n) => n.nodeName === "a");
 
-							if (!numberAnchor || !hrefAnchor) {
-								continue;
+								if (!numberAnchor || !hrefAnchor) {
+									continue;
+								}
+
+								const number = getTextContent(numberAnchor).trim();
+								const seats = parseInt(getTextContent(seatsCell).trim(), 10);
+								const furniture = getTextContent(furnitureCell).trim();
+								const type = getTextContent(typeCell).trim();
+								const href = getAttr(hrefAnchor, "href")?.trim();
+
+								if (!number || isNaN(seats) || seats < 0 || !furniture || !type || !href) continue;
+
+								rooms.push({ number, seats, furniture, type, href });
+							} catch {
+								continue; // skip row if error
 							}
-
-							const number = getTextContent(numberAnchor).trim();
-							const seats = parseInt(getTextContent(seatsCell).trim(), 10);
-							const furniture = getTextContent(furnitureCell).trim();
-							const type = getTextContent(typeCell).trim();
-							const href = getAttr(hrefAnchor, "href")?.trim();
-
-							if (!number || isNaN(seats) || seats < 0 || !furniture || !type || !href) continue;
-
-							rooms.push({ number, seats, furniture, type, href });
-						} catch {
-							continue; // skip row if error
 						}
 					}
 				}
@@ -2142,7 +2146,7 @@ class Model {
 		for (const course of data.courses) this.courseMap.set(course.id, course);
 		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
 		for (const building of data.buildings) this.buildingMap.set(building.id, building);
-		for (const room of data.rooms) this.roomMap.set(`${room.building}:${room.id}`, room);
+		for (const room of data.rooms) this.roomMap.set(`${room.buildingId}:${room.id}`, room);
 	} // end of genai
 
 	// --- LOAD AND SAVE ---
