@@ -62,7 +62,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// test series 12
 	app.post("/api/v2/datasets", upload.single("archive"), async (req, res) => {
 		// REQUEST VALIDATION
-		const kind = String(req.body?.kind);
+		const kind = req.body?.kind;
 		const archive = req.file;
 
 		const fields: Record<string, string> = {}; // format is ai generated (and modified)
@@ -180,8 +180,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		try {
 			await model.writeModel();
-			dataset.status = "completed";
-			dataset.message = "Dataset processing complete";
+			if (dataset.status !== "failed") {
+				dataset.status = "completed";
+				dataset.message = "Dataset processing complete";
+			}
 		} catch {
 			// for testing
 		}
@@ -189,6 +191,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// -- HELPER FUNCTIONS FOR POST DATASETS --
 	async function processFacilities(dataset: DatasetF, zip: any) {
+		// function contains some code gen'd from ai (albeit modified)
 		// Validate index.htm
 		const indexFile = zip.file("index.htm");
 		if (!indexFile) {
@@ -207,6 +210,264 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			dataset.status = "failed";
 			dataset.message = "index.htm could not be parsed";
 			return;
+		}
+
+		// parse5 traversal helpers (ai gen)
+		function getAttr(node: any, name: string): string | undefined {
+			if (!node.attrs) return undefined;
+			for (const attr of node.attrs) {
+				if (attr.name === name) return attr.value;
+			}
+			return undefined;
+		}
+
+		function getTextContent(node: any): string {
+			if (node.nodeName === "#text") {
+				if (node.value) return node.value;
+				return "";
+			}
+			if (!node.childNodes) return "";
+			let result = "";
+			for (const child of node.childNodes) {
+				result += getTextContent(child);
+			}
+			return result;
+		}
+
+		function hasClass(node: any, cls: string): boolean {
+			const classAttr = getAttr(node, "class");
+			if (!classAttr) return false;
+			for (const c of classAttr.split(/\s+/)) {
+				if (c === cls) return true;
+			}
+			return false;
+		}
+
+		function findFirst(node: any, predicate: (n: any) => boolean): any | null {
+			if (predicate(node)) return node;
+			if (!node.childNodes) return null;
+			for (const child of node.childNodes) {
+				const result = findFirst(child, predicate);
+				if (result) return result;
+			}
+			return null;
+		}
+
+		function findAll(node: any, predicate: (n: any) => boolean): any[] {
+			const results: any[] = [];
+			if (predicate(node)) results.push(node);
+			if (!node.childNodes) return results;
+			for (const child of node.childNodes) {
+				for (const r of findAll(child, predicate)) {
+					results.push(r);
+				}
+			}
+			return results;
+		}
+
+		function findByClass(node: any, cls: string): any | null {
+			return findFirst(node, (n) => {
+				if (!n.attrs) return false;
+				return hasClass(n, cls);
+			});
+		}
+
+		function findAllByClass(node: any, cls: string): any[] {
+			return findAll(node, (n) => {
+				if (!n.attrs) return false;
+				return hasClass(n, cls);
+			});
+		}
+
+		function findTable(node: any): any | null {
+			return findFirst(node, (n) => {
+				if (n.nodeName !== "table") return false;
+				return hasClass(n, "views-table");
+			});
+		}
+
+		function getRows(table: any): any[] {
+			return findAll(table, (n) => n.nodeName === "tr");
+		}
+
+		// end ai gen
+
+		// Attempt to Find Table
+		const buildingTable = findTable(root);
+		if (!buildingTable) {
+			dataset.status = "failed";
+			dataset.message = "No building table found in index.htm";
+			return;
+		}
+
+		// Extract building information
+
+		interface buildingInfo {
+			fullname: string;
+			shortname: string;
+			address: string;
+			link: string;
+		}
+
+		const buildingInfos: buildingInfo[] = []; // ai gen'ed
+
+		for (const row of getRows(buildingTable)) {
+			try {
+				const fullNameCell = findByClass(row, "views-field-title");
+				const shortNameCell = findByClass(row, "views-field-field-building-code");
+				const addressCell = findByClass(row, "views-field-field-building-address");
+
+				if (!fullNameCell || !shortNameCell || !addressCell) {
+					continue;
+				} // skip any row that has missing info
+				const fullNameAnchor = findFirst(fullNameCell, (n) => n.nodeName === "a");
+				if (!fullNameAnchor) continue;
+
+				const fullname = getTextContent(fullNameAnchor).trim();
+				const link = getAttr(fullNameAnchor, "href")?.trim();
+				const shortname = getTextContent(shortNameCell).trim();
+				const address = getTextContent(addressCell).trim();
+
+				if (!fullname || !link || !shortname || !address) continue; // skip if no text
+
+				buildingInfos.push({ fullname, shortname, address, link });
+			} catch {
+				continue; // skip row if error
+			}
+		}
+
+		for (const building of buildingInfos) {
+			interface RoomInfo {
+				number: string;
+				seats: number;
+				furniture: string;
+				type: string;
+				href: string;
+			}
+
+			const rooms: RoomInfo[] = [];
+
+			try {
+				// ai gen'd
+				const linkPath = building.link.replace(/^\.\//, "");
+				const roomFile = zip.file(linkPath);
+
+				if (roomFile) {
+					const roomContent = await roomFile.async("string");
+					const roomRoot = parse5.parse(roomContent);
+					const roomTable = findTable(roomRoot);
+					if (roomTable) {
+						for (const row of getRows(roomTable)) {
+							try {
+								const numberCell = findByClass(row, "views-field-field-room-number");
+								const seatsCell = findByClass(row, "views-field-field-room-capacity");
+								const furnitureCell = findByClass(row, "views-field-field-room-furniture");
+								const typeCell = findByClass(row, "views-field-field-room-type");
+								const hrefCell = findByClass(row, "views-field-nothing");
+
+								if (!numberCell || !seatsCell || !furnitureCell || !typeCell || !hrefCell) {
+									continue;
+								} // skip
+								const numberAnchor = findFirst(numberCell, (n) => n.nodeName === "a");
+								const hrefAnchor = findFirst(hrefCell, (n) => n.nodeName === "a");
+
+								if (!numberAnchor || !hrefAnchor) {
+									continue;
+								}
+
+								const number = getTextContent(numberAnchor).trim();
+								const seats = parseInt(getTextContent(seatsCell).trim(), 10);
+								const furniture = getTextContent(furnitureCell).trim();
+								const type = getTextContent(typeCell).trim();
+								const href = getAttr(hrefAnchor, "href")?.trim();
+
+								if (!number || isNaN(seats) || seats < 0 || !furniture || !type || !href) continue;
+
+								rooms.push({ number, seats, furniture, type, href });
+							} catch {
+								continue; // skip row if error
+							}
+						}
+					}
+				}
+			} catch {
+				// building still valid
+			}
+
+			// Step 6: Extract geolocation information
+
+			let lat: number;
+			let lon: number;
+
+			try {
+				const encodedAddr = encodeURIComponent(building.address);
+				const geoRes = await fetch(`http://cs310.students.cs.ubc.ca:11316/api/v1/project_team<006>/${encodedAddr}`);
+				const geoData = (await geoRes.json()) as any; // parse
+
+				if (geoData.error || geoData.lat === undefined || geoData.lon === undefined) continue;
+
+				lat = geoData.lat;
+				lon = geoData.lon;
+			} catch {
+				// error = ignore
+				continue;
+			}
+
+			// 7: Load buildings
+
+			const currBuilding = model.getBuildingById(building.shortname);
+			if (!currBuilding) {
+				// new building
+				model.setBuilding(building.shortname, building.fullname, building.address, lat, lon);
+				dataset.stats.buildings_added++;
+			} else if (
+				// needs updating
+				currBuilding.name !== building.fullname ||
+				currBuilding.address !== building.address ||
+				currBuilding.lat !== lat ||
+				currBuilding.lon !== lon
+			) {
+				model.setBuilding(building.shortname, building.fullname, building.address, lat, lon);
+				dataset.stats.buildings_modified++;
+			} // else ignore
+
+			for (const room of rooms) {
+				const roomId = `${building.shortname}_${room.number}`;
+				const existingRoom = model.getRoomById(roomId, building.shortname);
+
+				if (!existingRoom) {
+					model.setRoom(
+						roomId,
+						building.shortname,
+						building.shortname,
+						room.number,
+						room.type,
+						room.furniture,
+						room.href,
+						room.seats
+					);
+					dataset.stats.rooms_added++;
+				} else if (
+					existingRoom.building !== building.shortname ||
+					existingRoom.number !== room.number ||
+					existingRoom.seats !== room.seats ||
+					existingRoom.type !== room.type ||
+					existingRoom.furniture !== room.furniture ||
+					existingRoom.href !== room.href
+				) {
+					model.setRoom(
+						roomId,
+						building.shortname,
+						building.shortname,
+						room.number,
+						room.type,
+						room.furniture,
+						room.href,
+						room.seats
+					);
+					dataset.stats.rooms_modified++;
+				}
+			}
 		}
 	}
 
@@ -1885,7 +2146,7 @@ class Model {
 		for (const course of data.courses) this.courseMap.set(course.id, course);
 		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
 		for (const building of data.buildings) this.buildingMap.set(building.id, building);
-		for (const room of data.rooms) this.roomMap.set(`${room.building}:${room.id}`, room);
+		for (const room of data.rooms) this.roomMap.set(`${room.buildingId}:${room.id}`, room);
 	} // end of genai
 
 	// --- LOAD AND SAVE ---
