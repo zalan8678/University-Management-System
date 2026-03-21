@@ -2722,6 +2722,211 @@ describe("REST API v1", function () {
 		expect(res.body.message).to.include("asterisks can only be the first or last character");
 	});
 	// End of AI Code
+	it("60: DELETE /api/v1/courses/{course} should respond with status OK and body course data", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put(`/api/v1/courses/cpsc310/sections/2021w1`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/cpsc310/sections/2021w2`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		const res = await request(app).delete("/api/v1/courses/cpsc310");
+
+		expect(res).to.have.property("status", OK);
+		expect(res).to.have.deep.property("body", {
+			id: "cpsc310",
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+			sections: 2,
+		});
+	});
+	// Start of AI Code
+	it("61: POST /api/v2/search should not leak unrequested GROUP keys into the final projection (Column Leak Bug)", async () => {
+		// Setup Building
+		await request(app).put("/api/v2/buildings/alrd").send({
+			name: "Allard Hall",
+			address: "1822 East Mall",
+			lat: 49.2699,
+			lon: -123.25318,
+		});
+
+		// Setup Rooms
+		await request(app).put("/api/v2/buildings/alrd/rooms/105").send({
+			building: "ALRD",
+			number: "105",
+			type: "Tiered Large",
+			furniture: "Classroom-Fixed Tables",
+			href: "test_url",
+			seats: 100,
+		});
+		await request(app).put("/api/v2/buildings/alrd/rooms/106").send({
+			building: "ALRD",
+			number: "106",
+			type: "Tiered Large",
+			furniture: "Classroom-Fixed Tables",
+			href: "test_url",
+			seats: 50,
+		});
+
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: { IS: { building: "ALRD" } },
+					OPTIONS: { COLUMNS: ["building", "totalSeats"] }, // Requesting ONLY 2 columns
+					TRANSFORMATIONS: {
+						GROUP: ["building", "type", "furniture"], // Grouping by 3 columns
+						APPLY: [{ totalSeats: { SUM: "seats" } }],
+					},
+				},
+			});
+
+		expect(res.status).to.equal(OK);
+
+		// The 'type' and 'furniture' keys MUST NOT be present in the final output
+		expect(res.body).to.deep.equal([{ building: "ALRD", totalSeats: 150 }]);
+	});
+
+	it("62: POST /api/v2/search should correctly calculate aggregations without IEEE 754 precision drift", async () => {
+		// Setup a course with specific averages that naturally cause float drift in standard JS
+		await request(app).put("/api/v1/courses/math100").send({
+			title: "Calculus I",
+			dept: "math",
+			code: "100",
+		});
+
+		// 90.10 + 90.20 + 90.20 = 270.50 / 3 = 90.1666666...
+		// Properly rounded using Decimal.js should exactly equal 90.17
+		await request(app)
+			.put("/api/v1/courses/math100/sections/s1")
+			.send({ instructor: "A", year: 2014, avg: 90.1, pass: 1, fail: 0, audit: 0 });
+		await request(app)
+			.put("/api/v1/courses/math100/sections/s2")
+			.send({ instructor: "B", year: 2014, avg: 90.2, pass: 1, fail: 0, audit: 0 });
+		await request(app)
+			.put("/api/v1/courses/math100/sections/s3")
+			.send({ instructor: "C", year: 2014, avg: 90.2, pass: 1, fail: 0, audit: 0 });
+
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: { EQ: { year: 2014 } },
+					OPTIONS: { COLUMNS: ["dept", "average"] },
+					TRANSFORMATIONS: {
+						GROUP: ["dept"],
+						APPLY: [{ average: { AVG: "avg" } }],
+					},
+				},
+			});
+
+		expect(res.status).to.equal(OK);
+		expect(res.body).to.deep.equal([{ dept: "math", average: 90.17 }]);
+	});
+
+	it("63: POST /api/v2/search should not collapse distinct groups with colliding group keys", async () => {
+		// Setup Course 1
+		await request(app).put("/api/v1/courses/c1").send({
+			title: "Test Course 1",
+			dept: "cpsc",
+			code: "1",
+		});
+		await request(app).put("/api/v1/courses/c1/sections/s1").send({
+			instructor: "john|doe", // Edge case instructor name
+			year: 2020,
+			avg: 90,
+			pass: 1,
+			fail: 0,
+			audit: 0,
+		});
+
+		// Setup Course 2
+		await request(app).put("/api/v1/courses/c2").send({
+			title: "Test Course 2",
+			dept: "cpsc|john", // Edge case dept name
+			code: "2",
+		});
+		await request(app).put("/api/v1/courses/c2/sections/s1").send({
+			instructor: "doe",
+			year: 2020,
+			avg: 80,
+			pass: 1,
+			fail: 0,
+			audit: 0,
+		});
+
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "course_offerings",
+				query: {
+					WHERE: {},
+					OPTIONS: {
+						COLUMNS: ["dept", "instructor", "count"],
+					},
+					TRANSFORMATIONS: {
+						GROUP: ["dept", "instructor"],
+						APPLY: [{ count: { COUNT: "avg" } }],
+					},
+				},
+			});
+
+		expect(res.status).to.equal(OK);
+
+		// Naive joining (e.g., `dept + "|" + instructor`) would result in a single group "cpsc|john|doe" with a count of 2.
+		// The new system should correctly recognize these as two separate groups of 1.
+		expect(res.body).to.have.lengthOf(2);
+		expect(res.body).to.have.deep.members([
+			{ dept: "cpsc", instructor: "john|doe", count: 1 },
+			{ dept: "cpsc|john", instructor: "doe", count: 1 },
+		]);
+	});
+	// End of AI Code
+	it("64: GET /api/v1/courses/{course} should return 404 for deleted course", async () => {
+		await request(app).put("/api/v1/courses/cpsc310").send({
+			title: "Introduction to Software Engineering",
+			dept: "Computer Science",
+			code: "310",
+		});
+		await request(app).put(`/api/v1/courses/cpsc310/sections/2021w1`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).put(`/api/v1/courses/cpsc310/sections/2021w2`).send({
+			instructor: "holmes, reid",
+			year: 2021,
+			avg: 54,
+			pass: 167,
+			fail: 3,
+			audit: 1,
+		});
+		await request(app).delete("/api/v1/courses/cpsc310");
+		const res = await request(app).get(`/api/v1/courses/cpsc310/sections/2021w2`);
+		expect(res).to.have.property("status", NOT_FOUND);
+		const res2 = await request(app).get(`/api/v1/courses/cpsc310/`);
+		expect(res2).to.have.property("status", NOT_FOUND);
+    });
 
 	it("60: Case: Provided File (facilities)", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "campus.zip"));
@@ -2777,5 +2982,6 @@ describe("REST API v1", function () {
 			},
 			message: "Dataset processing complete",
 		});
+
 	});
 });
