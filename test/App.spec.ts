@@ -2926,9 +2926,9 @@ describe("REST API v1", function () {
 		expect(res).to.have.property("status", NOT_FOUND);
 		const res2 = await request(app).get(`/api/v1/courses/cpsc310/`);
 		expect(res2).to.have.property("status", NOT_FOUND);
-    });
+	});
 
-	it("60: Case: Provided File (facilities)", async () => {
+	it("65: Case: Provided File (facilities)", async () => {
 		const datasetBuffer = await fs.readFile(path.resolve(__dirname, "campus.zip"));
 		await request(app)
 			.post("/api/v2/datasets")
@@ -2982,6 +2982,5 @@ describe("REST API v1", function () {
 			},
 			message: "Dataset processing complete",
 		});
-
 	});
 });
