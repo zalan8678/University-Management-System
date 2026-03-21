@@ -1246,131 +1246,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			res.status(400).send({ error: "Invalid query", message: err.message });
 		}
 	});
-
-	// --- V2 HELPER FUNCTIONS ---
-
-	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
-		// 1. Filter
-		let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
-
-		// 2. Transformations (Grouping & Aggregation)
-		let processed: any[];
-		if (query.TRANSFORMATIONS) {
-			const transformed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
-
-			// FIX: Final Projection for Transformations (The "Column Leak" Bug)
-			// We must strip away any keys used in GROUP that were NOT requested in COLUMNS.
-			processed = transformed.map((item) => {
-				const row: any = {};
-				for (const col of query.OPTIONS.COLUMNS) {
-					row[col] = item[col];
-				}
-				return row;
-			});
-		} else {
-			processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
-		}
-
-		// 3. Sorting (Handle V1 string or V2 Sort Object)
-		if (query.OPTIONS.ORDER) {
-			const order = query.OPTIONS.ORDER;
-			const isV2Sort = typeof order === "object" && order !== null;
-			const direction = isV2Sort ? order.dir : "UP";
-			const keys = isV2Sort ? order.keys : [order];
-
-			processed.sort((a, b) => {
-				for (const key of keys) {
-					if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
-					if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
-				}
-				return 0; // Maintain stable sort if all sort keys are equal
-			});
-		}
-
-		return processed;
-	}
-
-	function performTransformations(data: any[], transformations: any, kind: string): any[] {
-		const groups = new Map<string, any[]>();
-		const { GROUP, APPLY } = transformations;
-
-		// Grouping
-		for (const item of data) {
-			// Collect the actual values for this item's group keys
-			const groupValues = GROUP.map((k: string) => {
-				const val =
-					kind === "course_offerings" && sfields.includes(k) && k !== "instructor"
-						? model.getCourseById(item.courseId)?.[k as keyof Course]
-						: item[k];
-				return val;
-			});
-
-			// FIX: Grouping Key Collision Bug
-			// Serialize the array to a JSON string instead of joining with a pipe.
-			// This ensures ["cpsc|john", "doe"] and ["cpsc", "john|doe"] remain distinct.
-			const groupKey = JSON.stringify(groupValues);
-
-			if (!groups.has(groupKey)) groups.set(groupKey, []);
-			groups.get(groupKey)!.push(item);
-		}
-
-		// Aggregation
-		return Array.from(groups.values()).map((groupItems) => {
-			const result: any = {};
-
-			// Set Group Keys
-			GROUP.forEach((k: string) => {
-				result[k] =
-					kind === "course_offerings" && sfields.includes(k) && k !== "instructor"
-						? model.getCourseById(groupItems[0].courseId)?.[k as keyof Course]
-						: groupItems[0][k];
-			});
-
-			// Set Apply Keys
-			APPLY.forEach((rule: any) => {
-				const applyKey = Object.keys(rule)[0];
-				const entry = rule[applyKey];
-				const token = Object.keys(entry)[0];
-				const key = entry[token];
-				result[applyKey] = calculateAggregation(groupItems, token, key);
-			});
-
-			return result;
-		});
-	}
-
-	function calculateAggregation(items: any[], token: string, key: string): number {
-		const values = items.map((i) => i[key]);
-
-		switch (token) {
-			case "MAX":
-				return Math.max(...values);
-			case "MIN":
-				return Math.min(...values);
-			case "COUNT":
-				return new Set(values).size;
-			case "SUM": {
-				// FIX: IEEE 754 Floating Point Precision Bug
-				let sum = new Decimal(0);
-				for (const val of values) {
-					sum = sum.add(new Decimal(val));
-				}
-				return Number(sum.toNumber().toFixed(2));
-			}
-			case "AVG": {
-				// FIX: IEEE 754 Floating Point Precision Bug
-				let total = new Decimal(0);
-				for (const val of values) {
-					total = total.add(new Decimal(val));
-				}
-				const avg = total.toNumber() / values.length;
-				return Number(avg.toFixed(2));
-			}
-			default:
-				return 0;
-		}
-	}
-
 	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
@@ -1720,6 +1595,144 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return row;
 	} // End of AI Code
+	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
+		// 1. Filter
+		let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
+
+		// 2. Transformations (Grouping & Aggregation)
+		let processed: any[];
+		if (query.TRANSFORMATIONS) {
+			const transformed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
+
+			// Final Projection for Transformations (The "Column Leak" Bug Fix)
+			processed = transformed.map((item) => {
+				const row: any = {};
+				for (const col of query.OPTIONS.COLUMNS) {
+					row[col] = item[col];
+				}
+				return row;
+			});
+		} else {
+			processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
+		}
+
+		// 3. Sorting (Handle V1 string or V2 Sort Object)
+		if (query.OPTIONS.ORDER) {
+			const order = query.OPTIONS.ORDER;
+			const isV2Sort = typeof order === "object" && order !== null;
+			const direction = isV2Sort ? order.dir : "UP";
+			const keys = isV2Sort ? order.keys : [order];
+
+			processed.sort((a, b) => {
+				for (const key of keys) {
+					if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
+					if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
+				}
+				return 0; // Maintain stable sort if all sort keys are equal
+			});
+		}
+
+		return processed;
+	}
+
+	function performTransformations(data: any[], transformations: any, kind: string): any[] {
+		const groups = new Map<string, any[]>();
+		const { GROUP, APPLY } = transformations;
+
+		// Grouping
+		for (const item of data) {
+			const groupValues = GROUP.map((k: string) => {
+				if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
+					return model.getCourseById(item.courseId)?.[k as keyof Course];
+				} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
+					// Fix: Fetch building-level fields for grouping
+					return model.getBuildingById(item.buildingId)?.[k as keyof Building];
+				}
+				return item[k];
+			});
+
+			// Serialize array to JSON string to prevent collision bugs (e.g., "cpsc|john" vs "cpsc", "john|doe")
+			const groupKey = JSON.stringify(groupValues);
+
+			if (!groups.has(groupKey)) groups.set(groupKey, []);
+			groups.get(groupKey)!.push(item);
+		}
+
+		// Aggregation
+		return Array.from(groups.values()).map((groupItems) => {
+			const result: any = {};
+
+			// Set Group Keys
+			GROUP.forEach((k: string) => {
+				if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
+					result[k] = model.getCourseById(groupItems[0].courseId)?.[k as keyof Course];
+				} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
+					// Fix: Fetch building-level fields for group key projection
+					result[k] = model.getBuildingById(groupItems[0].buildingId)?.[k as keyof Building];
+				} else {
+					result[k] = groupItems[0][k];
+				}
+			});
+
+			// Set Apply Keys
+			APPLY.forEach((rule: any) => {
+				const applyKey = Object.keys(rule)[0];
+				const entry = rule[applyKey];
+				const token = Object.keys(entry)[0];
+				const key = entry[token];
+
+				// Fix: Extract values BEFORE passing to calculateAggregation to handle parent-level COUNT lookups
+				const values = groupItems.map((item) => {
+					if (kind === "course_offerings" && sfields.includes(key) && key !== "instructor") {
+						return model.getCourseById(item.courseId)?.[key as keyof Course];
+					} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(key)) {
+						return model.getBuildingById(item.buildingId)?.[key as keyof Building];
+					}
+					return item[key];
+				});
+
+				result[applyKey] = calculateAggregation(values, token);
+			});
+
+			return result;
+		});
+	}
+
+	function calculateAggregation(values: any[], token: string): number {
+		switch (token) {
+			case "MAX":
+				return Math.max(...values);
+			case "MIN":
+				return Math.min(...values);
+			case "COUNT":
+				return new Set(values).size;
+			case "SUM": {
+				let sum = new Decimal(0);
+				for (const val of values) {
+					if (typeof val === "number") {
+						sum = sum.add(new Decimal(val));
+					}
+				}
+				return Number(sum.toNumber().toFixed(2));
+			}
+			case "AVG": {
+				let total = new Decimal(0);
+				let count = 0;
+				for (const val of values) {
+					if (typeof val === "number") {
+						total = total.add(new Decimal(val));
+						count++;
+					}
+				}
+				if (count === 0) return 0;
+				const avg = total.toNumber() / count;
+				return Number(avg.toFixed(2));
+			}
+			default:
+				return 0;
+		}
+	}
+
 	function evaluateFilterV2(filter: any, item: any, kind: string): boolean {
 		if (Object.keys(filter).length === 0) return true;
 
@@ -1736,7 +1749,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		let actualValue: any;
 
 		if (kind === "course_offerings") {
-			// Look up parent Course if field is a course-level field
 			if (sfields.includes(field) && field !== "instructor") {
 				const course = model.getCourseById(item.courseId);
 				actualValue = course ? (course as any)[field] : "";
@@ -1744,8 +1756,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				actualValue = item[field];
 			}
 		} else {
-			// Facilities fields are all contained within the Room object
-			actualValue = item[field];
+			// Fix: Look up parent Building for building-level fields
+			if (["name", "address", "lat", "lon"].includes(field)) {
+				const building = model.getBuildingById(item.buildingId);
+				actualValue = building ? (building as any)[field] : undefined;
+			} else {
+				actualValue = item[field];
+			}
 		}
 
 		if (key === "LT") return actualValue < value[field];
@@ -1764,13 +1781,17 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				if (mfields.includes(col) || col === "instructor") {
 					row[col] = item[col];
 				} else {
-					// Fetch from Course model
 					const course = model.getCourseById(item.courseId);
 					row[col] = course ? (course as any)[col] : undefined;
 				}
 			} else {
-				// Facilities: mapping is direct from the Room object
-				row[col] = item[col];
+				// Fix: Fetch from Building model for parent fields
+				if (["name", "address", "lat", "lon"].includes(col)) {
+					const building = model.getBuildingById(item.buildingId);
+					row[col] = building ? (building as any)[col] : undefined;
+				} else {
+					row[col] = item[col];
+				}
 			}
 		}
 
