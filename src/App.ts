@@ -2,6 +2,7 @@ import fs from "fs/promises";
 import express from "express";
 import cors from "cors";
 import path from "path";
+import Decimal from "decimal.js";
 
 /**
  * Express application.
@@ -597,6 +598,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
+		const sectionCount = course.sectionIds.length;
 
 		// delete
 		await model.delCourse(req.params.courseId); // also handles parents
@@ -605,7 +607,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			title: course.title,
 			dept: course.dept,
 			code: course.code,
-			sections: course.sectionIds.length,
+			sections: sectionCount,
 		});
 	});
 
@@ -939,7 +941,17 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// 2. Transformations (Grouping & Aggregation)
 		let processed: any[];
 		if (query.TRANSFORMATIONS) {
-			processed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
+			const transformed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
+
+			// FIX: Final Projection for Transformations (The "Column Leak" Bug)
+			// We must strip away any keys used in GROUP that were NOT requested in COLUMNS.
+			processed = transformed.map((item) => {
+				const row: any = {};
+				for (const col of query.OPTIONS.COLUMNS) {
+					row[col] = item[col];
+				}
+				return row;
+			});
 		} else {
 			processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
 		}
@@ -947,7 +959,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// 3. Sorting (Handle V1 string or V2 Sort Object)
 		if (query.OPTIONS.ORDER) {
 			const order = query.OPTIONS.ORDER;
-			const isV2Sort = typeof order === "object";
+			const isV2Sort = typeof order === "object" && order !== null;
 			const direction = isV2Sort ? order.dir : "UP";
 			const keys = isV2Sort ? order.keys : [order];
 
@@ -956,7 +968,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 					if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
 					if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
 				}
-				return 0;
+				return 0; // Maintain stable sort if all sort keys are equal
 			});
 		}
 
@@ -969,13 +981,19 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		// Grouping
 		for (const item of data) {
-			const groupKey = GROUP.map((k: string) => {
+			// Collect the actual values for this item's group keys
+			const groupValues = GROUP.map((k: string) => {
 				const val =
 					kind === "course_offerings" && sfields.includes(k) && k !== "instructor"
 						? model.getCourseById(item.courseId)?.[k as keyof Course]
 						: item[k];
 				return val;
-			}).join("|");
+			});
+
+			// FIX: Grouping Key Collision Bug
+			// Serialize the array to a JSON string instead of joining with a pipe.
+			// This ensures ["cpsc|john", "doe"] and ["cpsc", "john|doe"] remain distinct.
+			const groupKey = JSON.stringify(groupValues);
 
 			if (!groups.has(groupKey)) groups.set(groupKey, []);
 			groups.get(groupKey)!.push(item);
@@ -984,6 +1002,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		// Aggregation
 		return Array.from(groups.values()).map((groupItems) => {
 			const result: any = {};
+
 			// Set Group Keys
 			GROUP.forEach((k: string) => {
 				result[k] =
@@ -1007,6 +1026,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	function calculateAggregation(items: any[], token: string, key: string): number {
 		const values = items.map((i) => i[key]);
+
 		switch (token) {
 			case "MAX":
 				return Math.max(...values);
@@ -1014,11 +1034,23 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				return Math.min(...values);
 			case "COUNT":
 				return new Set(values).size;
-			case "SUM":
-				return Number(values.reduce((a, b) => a + b, 0).toFixed(2));
-			case "AVG":
-				const avg = values.reduce((a, b) => a + b, 0) / values.length;
+			case "SUM": {
+				// FIX: IEEE 754 Floating Point Precision Bug
+				let sum = new Decimal(0);
+				for (const val of values) {
+					sum = sum.add(new Decimal(val));
+				}
+				return Number(sum.toNumber().toFixed(2));
+			}
+			case "AVG": {
+				// FIX: IEEE 754 Floating Point Precision Bug
+				let total = new Decimal(0);
+				for (const val of values) {
+					total = total.add(new Decimal(val));
+				}
+				const avg = total.toNumber() / values.length;
 				return Number(avg.toFixed(2));
+			}
 			default:
 				return 0;
 		}
@@ -1580,7 +1612,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
-
+		const roomCount = building.roomIds.length;
 		// delete
 		await model.delBuilding(req.params.buildingId);
 		res.status(200).send({
@@ -1589,7 +1621,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			address: building.address,
 			lat: building.lat,
 			lon: building.lon,
-			rooms: building.roomIds.length,
+			rooms: roomCount,
 		});
 	});
 	// Start of AI Code
@@ -1685,14 +1717,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	app.put("/api/v2/buildings/:buildingId/rooms/:roomId", async (req, res) => {
 		const buildingToCheck = model.getBuildingById(req.params.buildingId);
-		if (!buildingToCheck) {
-			res.status(404).send({
-				error: "Not found",
-				message: `no building with id '${req.params.buildingId}'`,
-			});
-			return;
-		}
-		const { building, number, type, furniture, href, seats } = req.body;
+		const { building, number, type, furniture, href, seats } = req.body || {};
 
 		const fields: Record<string, string> = {};
 
@@ -1729,7 +1754,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		if (seats === undefined) {
 			fields.seats = "required but missing";
-		} else if (typeof seats !== "number" || seats < 0) {
+		} else if (typeof seats !== "number" || Number.isNaN(seats) || seats < 0) {
 			fields.seats = "expected a number >= 0";
 		}
 
@@ -1737,6 +1762,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			res.status(422).send({
 				error: "Validation failed",
 				fields,
+			});
+			return;
+		}
+		if (!buildingToCheck) {
+			res.status(404).send({
+				error: "Not found",
+				message: `no building with id '${req.params.buildingId}'`,
 			});
 			return;
 		}
@@ -1831,7 +1863,7 @@ class Model {
 		for (const course of data.courses) this.courseMap.set(course.id, course);
 		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
 		for (const building of data.buildings) this.buildingMap.set(building.id, building);
-		for (const room of data.rooms) this.roomMap.set(`${room.building}:${room.id}`, room);
+		for (const room of data.rooms) this.roomMap.set(`${room.buildingId}:${room.id}`, room);
 	} // end of genai
 
 	// --- LOAD AND SAVE ---
