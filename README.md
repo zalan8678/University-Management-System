@@ -42,9 +42,3 @@ IntelliJ Ultimate should be automatically configured the first time you open the
 ### License
 
 Licensing terms are specified in [LICENSE](LICENSE).
-
-## Insights
-
-### Departments with averages above 80
-
-This insight matters to identify departments with grade inflation. 
