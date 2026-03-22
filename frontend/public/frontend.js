@@ -2,7 +2,8 @@
 let departments = [];
 let whereClause = {};
 const ctx = document.getElementById('myChart');
-const ctx2 = document.getElementById('chart2')
+const ctx2 = document.getElementById('chart2');
+const ctx3 = document.getElementById('chart3');
 window.addEventListener("DOMContentLoaded", async () => {
 	// UPLOAD BUTTON THINGS
 	const uploadLoc = document.getElementById("uploadLocation");
@@ -148,7 +149,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 			},
 		}),
 	});
-	// End of AI Code
 
 	const facilityResults = await searchResponse2.json();
 
@@ -174,6 +174,63 @@ window.addEventListener("DOMContentLoaded", async () => {
 				title: {
 					display: true,
 					text: 'Distribution of Seats by Room Type'
+				}
+			}
+		}
+	});
+	const searchResponse3 = await fetch(`/api/v2/search`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			kind: "course_offerings",
+			query: {
+				WHERE: {
+					NOT: {
+						IS: { instructor: "" }
+					}
+				},
+				OPTIONS: {
+					COLUMNS: ["instructor", "totalFails"],
+					// Sorting DOWN is crucial here so the worst are at the top of the array
+					ORDER: {
+						dir: "DOWN",
+						keys: ["totalFails"]
+					}
+				},
+				TRANSFORMATIONS: {
+					GROUP: ["instructor"], // Group by Instructor instead of Dept
+					APPLY: [{ "totalFails": { "SUM": "fail" } }]
+				}
+			},
+		}),
+	});
+
+	const allInstructorResults = await searchResponse3.json();
+	const top20Instructors = allInstructorResults.slice(0, 20);
+	const failLabels = top20Instructors.map(item => item.instructor);
+	const failDataValues = top20Instructors.map(item => item.totalFails);
+	new Chart(ctx3, {
+		type: 'bar', // Changed to a Bar chart
+		data: {
+			labels: failLabels,
+			datasets: [{
+				label: 'Total Fails',
+				data: failDataValues,
+				backgroundColor: '#EF5350', // A nice red color for fails
+				borderWidth: 1
+			}]
+		},
+		options: {
+			indexAxis: 'y', // This flips the chart to be horizontal so names are readable
+			plugins: {
+				title: {
+					display: true,
+					text: 'Top 20 Instructors with the Most Failed Grades'
+				}
+			},
+			scales: {
+				x: {
+					beginAtZero: true
 				}
 			}
 		}
