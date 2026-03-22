@@ -2983,4 +2983,186 @@ describe("REST API v1", function () {
 			message: "Dataset processing complete",
 		});
 	});
+	it("66: POST /api/v2/search should correctly group, apply MIN, and handle multiple ORDER keys with dir DOWN", async () => {
+		// Setup Buildings
+		await request(app)
+			.put("/api/v2/buildings/aerl")
+			.send({ name: "AERL Bldg", address: "123 Main", lat: 49.2, lon: -123.2 });
+		await request(app)
+			.put("/api/v2/buildings/anso")
+			.send({ name: "ANSO Bldg", address: "123 Main", lat: 49.2, lon: -123.2 });
+		await request(app)
+			.put("/api/v2/buildings/audx")
+			.send({ name: "AUDX Bldg", address: "123 Main", lat: 49.2, lon: -123.2 });
+		await request(app)
+			.put("/api/v2/buildings/alrd")
+			.send({ name: "ALRD Bldg", address: "123 Main", lat: 49.2, lon: -123.2 });
+		await request(app)
+			.put("/api/v2/buildings/angu")
+			.send({ name: "ANGU Bldg", address: "123 Main", lat: 49.2, lon: -123.2 });
+		await request(app)
+			.put("/api/v2/buildings/buch")
+			.send({ name: "BUCH Bldg", address: "123 Main", lat: 49.2, lon: -123.2 }); // Filtered out by A*
+
+		// Setup Rooms (Including extra rooms to verify MIN logic)
+		// AERL
+		await request(app)
+			.put("/api/v2/buildings/aerl/rooms/1")
+			.send({ building: "AERL", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 150 });
+		await request(app)
+			.put("/api/v2/buildings/aerl/rooms/2")
+			.send({ building: "AERL", number: "2", type: "Room", furniture: "Chairs", href: "url", seats: 144 }); // Min
+		// ANSO
+		await request(app)
+			.put("/api/v2/buildings/anso/rooms/1")
+			.send({ building: "ANSO", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 26 });
+		// AUDX
+		await request(app)
+			.put("/api/v2/buildings/audx/rooms/1")
+			.send({ building: "AUDX", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 20 });
+		// ALRD
+		await request(app)
+			.put("/api/v2/buildings/alrd/rooms/1")
+			.send({ building: "ALRD", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 50 });
+		await request(app)
+			.put("/api/v2/buildings/alrd/rooms/2")
+			.send({ building: "ALRD", number: "2", type: "Room", furniture: "Chairs", href: "url", seats: 20 }); // Min
+		// ANGU
+		await request(app)
+			.put("/api/v2/buildings/angu/rooms/1")
+			.send({ building: "ANGU", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 16 });
+		// BUCH (Should be ignored by WHERE)
+		await request(app)
+			.put("/api/v2/buildings/buch/rooms/1")
+			.send({ building: "BUCH", number: "1", type: "Room", furniture: "Chairs", href: "url", seats: 10 });
+
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					WHERE: {
+						IS: {
+							building: "A*",
+						},
+					},
+					OPTIONS: {
+						COLUMNS: ["building", "minSeats"],
+						ORDER: {
+							dir: "DOWN",
+							keys: ["minSeats", "building"],
+						},
+					},
+					TRANSFORMATIONS: {
+						GROUP: ["building"],
+						APPLY: [
+							{
+								minSeats: {
+									MIN: "seats",
+								},
+							},
+						],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", OK);
+		expect(res.body).to.deep.equal([
+			{
+				building: "AERL",
+				minSeats: 144,
+			},
+			{
+				building: "ANSO",
+				minSeats: 26,
+			},
+			{
+				building: "AUDX", // AUDX comes before ALRD because dir is DOWN (X > L in reverse) when minSeats are tied at 20
+				minSeats: 20,
+			},
+			{
+				building: "ALRD",
+				minSeats: 20,
+			},
+			{
+				building: "ANGU",
+				minSeats: 16,
+			},
+		]);
+	});
+	it("67: POST /api/v2/search should correctly filter, group, and aggregate on parent Building fields", async () => {
+		// Setup Building 1 (Should be filtered out by WHERE)
+		await request(app).put("/api/v2/buildings/b1").send({
+			name: "Building One",
+			address: "123 Old St",
+			lat: 40.0,
+			lon: -123.0,
+		});
+		await request(app).put("/api/v2/buildings/b1/rooms/r1").send({
+			building: "b1",
+			number: "101",
+			type: "Room",
+			furniture: "Chairs",
+			href: "url",
+			seats: 10,
+		});
+
+		// Setup Building 2 (Should pass the WHERE filter)
+		await request(app).put("/api/v2/buildings/b2").send({
+			name: "Building Two",
+			address: "456 New St",
+			lat: 50.0,
+			lon: -124.0,
+		});
+		await request(app).put("/api/v2/buildings/b2/rooms/r1").send({
+			building: "b2",
+			number: "101",
+			type: "Room",
+			furniture: "Chairs",
+			href: "url",
+			seats: 30,
+		});
+		await request(app).put("/api/v2/buildings/b2/rooms/r2").send({
+			building: "b2",
+			number: "102",
+			type: "Room",
+			furniture: "Chairs",
+			href: "url",
+			seats: 20,
+		});
+
+		const res = await request(app)
+			.post("/api/v2/search")
+			.send({
+				kind: "facilities",
+				query: {
+					// 1. Tests if evaluateFilterV2 correctly looks up parent Building lat
+					WHERE: {
+						GT: { lat: 45.0 },
+					},
+					OPTIONS: {
+						COLUMNS: ["name", "maxLat", "totalSeats"],
+						ORDER: "name",
+					},
+					TRANSFORMATIONS: {
+						// 2. Tests if performTransformations correctly groups by parent Building name
+						GROUP: ["name"],
+						APPLY: [
+							// 3. Tests if calculateAggregation correctly extracts parent Building lat
+							{ maxLat: { MAX: "lat" } },
+							{ totalSeats: { SUM: "seats" } },
+						],
+					},
+				},
+			});
+
+		expect(res).to.have.property("status", OK);
+		expect(res.body).to.deep.equal([
+			{
+				name: "Building Two",
+				maxLat: 50.0,
+				totalSeats: 50,
+			},
+		]);
+	});
 });
