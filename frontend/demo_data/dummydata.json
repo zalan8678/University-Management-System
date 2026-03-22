@@ -201,5 +201,74 @@
 			"audit": 6,
 			"courseId": "weeb167"
 		}
+	],
+	"buildings": [
+		{
+			"id": "DMP",
+			"name": "Hugh Dempster Pavilion",
+			"address": "6245 Agronomy Rd",
+			"lat": 49.26125, "lon": -123.24807,
+			"roomIds": ["DMP_110", "DMP_310", "DMP_201", "DMP_202", "DMP_401", "DMP_402"]
+		},
+		{
+			"id": "ICICS",
+			"name": "ICICS/CS",
+			"address": "2366 Main Mall",
+			"lat": 49.26111, "lon": -123.24944,
+			"roomIds": ["ICICS_X201", "ICICS_008", "ICICS_010", "ICICS_011", "ICICS_101", "ICICS_102", "ICICS_301"]
+		},
+		{
+			"id": "HEBB",
+			"name": "Hebb Building",
+			"address": "2045 East Mall",
+			"lat": 49.26611, "lon": -123.25222,
+			"roomIds": ["HEBB_100", "HEBB_112", "HEBB_114", "HEBB_116", "HEBB_202"]
+		},
+		{
+			"id": "WOOD",
+			"name": "Woodward Instructional Resources Centre",
+			"address": "2194 Health Sciences Mall",
+			"lat": 49.2641, "lon": -123.2462,
+			"roomIds": ["WOOD_1", "WOOD_2", "WOOD_3", "WOOD_4", "WOOD_5", "WOOD_6"]
+		},
+		{
+			"id": "NEST",
+			"name": "AMS Student Nest",
+			"address": "6133 University Blvd",
+			"lat": 49.2665, "lon": -123.2499,
+			"roomIds": ["NEST_2301", "NEST_2302", "NEST_2303", "NEST_2304", "NEST_2305", "NEST_2306"]
+		}
+	],
+	"rooms": [
+		{ "id": "DMP_110", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "110", "type": "Tiered Classroom", "furniture": "Fixed Tables", "href": "http://rb.gy/dmp110", "seats": 120 },
+		{ "id": "DMP_310", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "310", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/dmp310", "seats": 40 },
+		{ "id": "DMP_201", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "201", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/dmp201", "seats": 35 },
+		{ "id": "DMP_202", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "202", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/dmp202", "seats": 35 },
+		{ "id": "DMP_401", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "401", "type": "Lab", "furniture": "Computers", "href": "http://rb.gy/dmp401", "seats": 50 },
+		{ "id": "DMP_402", "buildingId": "DMP", "building": "Hugh Dempster Pavilion", "number": "402", "type": "Lab", "furniture": "Computers", "href": "http://rb.gy/dmp402", "seats": 50 },
+		{ "id": "ICICS_X201", "buildingId": "ICICS", "building": "ICICS/CS", "number": "X201", "type": "Lab", "furniture": "Movable Tables", "href": "http://rb.gy/icicsx201", "seats": 60 },
+		{ "id": "ICICS_008", "buildingId": "ICICS", "building": "ICICS/CS", "number": "008", "type": "Tiered Classroom", "furniture": "Fixed Tables", "href": "http://rb.gy/icics008", "seats": 80 },
+		{ "id": "ICICS_010", "buildingId": "ICICS", "building": "ICICS/CS", "number": "010", "type": "Tiered Classroom", "furniture": "Fixed Tables", "href": "http://rb.gy/icics010", "seats": 80 },
+		{ "id": "ICICS_011", "buildingId": "ICICS", "building": "ICICS/CS", "number": "011", "type": "Theater", "furniture": "Fixed Chairs", "href": "http://rb.gy/icics011", "seats": 200 },
+		{ "id": "ICICS_101", "buildingId": "ICICS", "building": "ICICS/CS", "number": "101", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/icics101", "seats": 25 },
+		{ "id": "ICICS_102", "buildingId": "ICICS", "building": "ICICS/CS", "number": "102", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/icics102", "seats": 25 },
+		{ "id": "ICICS_301", "buildingId": "ICICS", "building": "ICICS/CS", "number": "301", "type": "Lounge", "furniture": "Soft Seating", "href": "http://rb.gy/icics301", "seats": 15 },
+		{ "id": "HEBB_100", "buildingId": "HEBB", "building": "Hebb Building", "number": "100", "type": "Theater", "furniture": "Fixed Tables", "href": "http://rb.gy/hebb100", "seats": 375 },
+		{ "id": "HEBB_112", "buildingId": "HEBB", "building": "Hebb Building", "number": "112", "type": "Lab", "furniture": "Fixed Tables", "href": "http://rb.gy/hebb112", "seats": 40 },
+		{ "id": "HEBB_114", "buildingId": "HEBB", "building": "Hebb Building", "number": "114", "type": "Lab", "furniture": "Fixed Tables", "href": "http://rb.gy/hebb114", "seats": 40 },
+		{ "id": "HEBB_116", "buildingId": "HEBB", "building": "Hebb Building", "number": "116", "type": "Lab", "furniture": "Fixed Tables", "href": "http://rb.gy/hebb116", "seats": 40 },
+		{ "id": "HEBB_202", "buildingId": "HEBB", "building": "Hebb Building", "number": "202", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/hebb202", "seats": 30 },
+		{ "id": "WOOD_1", "buildingId": "WOOD", "building": "Woodward IRC", "number": "1", "type": "Theater", "furniture": "Fixed Chairs", "href": "http://rb.gy/wood1", "seats": 500 },
+		{ "id": "WOOD_2", "buildingId": "WOOD", "building": "Woodward IRC", "number": "2", "type": "Theater", "furniture": "Fixed Chairs", "href": "http://rb.gy/wood2", "seats": 500 },
+		{ "id": "WOOD_3", "buildingId": "WOOD", "building": "Woodward IRC", "number": "3", "type": "Tiered Classroom", "furniture": "Fixed Tables", "href": "http://rb.gy/wood3", "seats": 150 },
+		{ "id": "WOOD_4", "buildingId": "WOOD", "building": "Woodward IRC", "number": "4", "type": "Tiered Classroom", "furniture": "Fixed Tables", "href": "http://rb.gy/wood4", "seats": 150 },
+		{ "id": "WOOD_5", "buildingId": "WOOD", "building": "Woodward IRC", "number": "5", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/wood5", "seats": 20 },
+		{ "id": "WOOD_6", "buildingId": "WOOD", "building": "Woodward IRC", "number": "6", "type": "Small Group", "furniture": "Movable Tables", "href": "http://rb.gy/wood6", "seats": 20 },
+		{ "id": "NEST_2301", "buildingId": "NEST", "building": "AMS Nest", "number": "2301", "type": "Meeting Room", "furniture": "Movable Tables", "href": "http://rb.gy/nest2301", "seats": 12 },
+		{ "id": "NEST_2302", "buildingId": "NEST", "building": "AMS Nest", "number": "2302", "type": "Meeting Room", "furniture": "Movable Tables", "href": "http://rb.gy/nest2302", "seats": 12 },
+		{ "id": "NEST_2303", "buildingId": "NEST", "building": "AMS Nest", "number": "2303", "type": "Meeting Room", "furniture": "Movable Tables", "href": "http://rb.gy/nest2303", "seats": 12 },
+		{ "id": "NEST_2304", "buildingId": "NEST", "building": "AMS Nest", "number": "2304", "type": "Meeting Room", "furniture": "Movable Tables", "href": "http://rb.gy/nest2304", "seats": 12 },
+		{ "id": "NEST_2305", "buildingId": "NEST", "building": "AMS Nest", "number": "2305", "type": "Small Group", "furniture": "Soft Seating", "href": "http://rb.gy/nest2305", "seats": 8 },
+		{ "id": "NEST_2306", "buildingId": "NEST", "building": "AMS Nest", "number": "2306", "type": "Small Group", "furniture": "Soft Seating", "href": "http://rb.gy/nest2306", "seats": 8 }
 	]
 }

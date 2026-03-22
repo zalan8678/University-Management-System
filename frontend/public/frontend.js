@@ -2,6 +2,7 @@
 let departments = [];
 let whereClause = {};
 const ctx = document.getElementById('myChart');
+const ctx2 = document.getElementById('chart2')
 window.addEventListener("DOMContentLoaded", async () => {
 	// UPLOAD BUTTON THINGS
 	const uploadLoc = document.getElementById("uploadLocation");
@@ -121,6 +122,59 @@ window.addEventListener("DOMContentLoaded", async () => {
 		options: {
 			scales: {
 				y: {beginAtZero: true}
+			}
+		}
+	});
+	const searchResponse2 = await fetch(`/api/v2/search`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			kind: "facilities",
+			query: {
+				WHERE: {},
+				OPTIONS: {
+					// Include both the group key and the apply key
+					COLUMNS: ["type", "totalSeats"],
+					ORDER: {
+						dir: "DOWN",
+						keys: ["totalSeats"]
+					}
+				},
+				TRANSFORMATIONS: {
+					GROUP: ["type"],
+					// Use a unique name like totalSeats to avoid confusion with the raw 'seats' field
+					APPLY: [{ "totalSeats": { "SUM": "seats" } }]
+				}
+			},
+		}),
+	});
+	// End of AI Code
+
+	const facilityResults = await searchResponse2.json();
+
+	// Map the results for the Pie Chart
+	const pieLabels = facilityResults.map(item => item.type);
+	const pieDataValues = facilityResults.map(item => item.totalSeats);
+
+	new Chart(ctx2, {
+		type: 'pie',
+		data: {
+			labels: pieLabels,
+			datasets: [{
+				label: 'Total Seats',
+				data: pieDataValues,
+				backgroundColor: [
+					'#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
+				],
+				hoverOffset: 4
+			}]
+		},
+		options: {
+			plugins: {
+				title: {
+					display: true,
+					text: 'Distribution of Seats by Room Type'
+				}
 			}
 		}
 	});
