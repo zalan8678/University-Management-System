@@ -1,68 +1,70 @@
 
 let departments = [];
 let whereClause = {};
+const ctx = document.getElementById('myChart');
 window.addEventListener("DOMContentLoaded", async () => {
-    // UPLOAD BUTTON THINGS
-    const uploadLoc = document.getElementById("uploadLocation");
+	// UPLOAD BUTTON THINGS
+	const uploadLoc = document.getElementById("uploadLocation");
 
-    const fileInput = document.createElement("input"); // FILE INPUT
-    fileInput.type = "file";
-    fileInput.style.display = "none";
-    uploadLoc.appendChild(fileInput);
+	const fileInput = document.createElement("input"); // FILE INPUT
+	fileInput.type = "file";
+	fileInput.style.display = "none";
+	uploadLoc.appendChild(fileInput);
 
-    const uploadBtn = document.createElement("button"); // BUTTON
-    uploadBtn.textContent = "Upload Datset";
-    uploadBtn.style.marginLeft = "10px";
-    uploadLoc.appendChild(uploadBtn);
+	const uploadBtn = document.createElement("button"); // BUTTON
+	uploadBtn.textContent = "Upload Datset";
+	uploadBtn.style.marginLeft = "10px";
+	uploadLoc.appendChild(uploadBtn);
 
-    const statusDiv = document.createElement("div"); // STATUS (ai gen)
-    statusDiv.style.marginTop = "10px";
-    statusDiv.style.marginLeft = "10px";
-    statusDiv.style.fontWeight = "bold";
-    statusDiv.style.color = "black";
-    uploadLoc.appendChild(statusDiv); // end of ai gen
-    statusDiv.textContent = `Upload Status: Awaiting...`;
+	const statusDiv = document.createElement("div"); // STATUS (ai gen)
+	statusDiv.style.marginTop = "10px";
+	statusDiv.style.marginLeft = "10px";
+	statusDiv.style.fontWeight = "bold";
+	statusDiv.style.color = "black";
+	uploadLoc.appendChild(statusDiv); // end of ai gen
+	statusDiv.textContent = `Upload Status: Awaiting...`;
 
-    uploadBtn.onclick = () => fileInput.click(); // when click ask for input
+	uploadBtn.onclick = () => fileInput.click(); // when click ask for input
 
-    fileInput.addEventListener("change", async () => {
-        const file = fileInput.files[0];
-        if (!file) return;
-        
-        fileInput.value = "";
+	fileInput.addEventListener("change", async () => {
+		const file = fileInput.files[0];
+		if (!file) return;
 
-        // ai gen
-        const formData = new FormData();
-        formData.append("archive", file);
-        formData.append("kind", "course_offerings");
-        // end ai gen
+		fileInput.value = "";
 
-        const res = await fetch("/api/v1/datasets", {
-            method: "POST",
-            body: formData
-        });
+		// ai gen
+		const formData = new FormData();
+		formData.append("archive", file);
+		formData.append("kind", "course_offerings");
+		// end ai gen
 
-        const data = await res.json();
+		const res = await fetch("/api/v1/datasets", {
+			method: "POST",
+			body: formData
+		});
 
-        if (res.status == 202) {
-            alert("Upload Accepted!");
-        } else if (res.status == 422) {
-            alert("Error 422: Validation failed");
-            return;
-        } else {
-            statusDiv.textContent = `Error: ${res.status}`;
-            return;
-        };
+		const data = await res.json();
 
-        const datasetId = data.id;
+		if (res.status == 202) {
+			alert("Upload Accepted!");
+		} else if (res.status == 422) {
+			alert("Error 422: Validation failed");
+			return;
+		} else {
+			statusDiv.textContent = `Error: ${res.status}`;
+			return;
+		}
+		;
+
+		const datasetId = data.id;
 
 
-        statusDiv.textContent = "Upload Status: Processing...";
+		statusDiv.textContent = "Upload Status: Processing...";
 
-        pollComplete(datasetId, statusDiv);
-    });
+		pollComplete(datasetId, statusDiv);
+	});
 
-    const res = await fetch("/api/v1/courses?limit=5000");
+	const res = await fetch("/api/v1/courses?limit=5000");
 	const courses = await res.json();
 
 	document.body.appendChild(document.createElement("br"));
@@ -80,6 +82,49 @@ window.addEventListener("DOMContentLoaded", async () => {
 		newElement.value = department;
 		document.getElementById("deptSelect").appendChild(newElement);
 	}
+	// Start of Ai Generated Code
+	const searchResponse = await fetch(`/api/v2/search`, {
+		method: "POST",
+		headers: {"Content-Type": "application/json"},
+		body: JSON.stringify({
+			kind: "course_offerings",
+			query: {
+				WHERE: {GT: {avg: 80}},
+				OPTIONS: {
+					COLUMNS: ["dept", "avg"],
+					ORDER: "avg",
+				},
+				TRANSFORMATIONS: {
+					GROUP: ["dept"], // Note: GROUP must be an array in your backend logic
+					APPLY: [{"avg": {"AVG": "avg"}}] // You need an APPLY rule to use avg with GROUP
+				}
+			},
+		}),
+	});
+
+	const results = await searchResponse.json();
+
+// Map the objects to simple arrays for the chart
+	const labels = results.map(item => item.dept);
+	const dataValues = results.map(item => item.avg);
+
+	new Chart(ctx, {
+		type: 'bar',
+		data: {
+			labels: labels,
+			datasets: [{
+				label: 'Average Grade by Department',
+				data: dataValues,
+				borderWidth: 1
+			}]
+		},
+		options: {
+			scales: {
+				y: {beginAtZero: true}
+			}
+		}
+	});
+	// End of AI Code
 });
 
 // Generated by AI
