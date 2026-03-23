@@ -416,6 +416,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 			// 7: Load buildings
 
+			try {
+				// ai gen'd
+				validateBuilding(building.shortname, building.fullname, building.address, lat, lon);
+			} catch {
+				continue; // skip invalid building
+			}
+
 			const currBuilding = model.getBuildingById(building.shortname);
 			if (!currBuilding) {
 				// new building
@@ -433,6 +440,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			} // else ignore
 
 			for (const room of rooms) {
+				try {
+					// ai gen'd
+					validateRoom(building.shortname, room.number, room.seats, room.type, room.furniture, room.href);
+				} catch {
+					continue;
+				}
+
 				const roomId = `${building.shortname}_${room.number}`;
 				const existingRoom = model.getRoomById(roomId, building.shortname);
 
@@ -470,6 +484,31 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				}
 			}
 		}
+	}
+
+	function validateBuilding(shortname: string, fullname: string, address: string, lat: number, lon: number) {
+		// ai gen
+		if (!shortname || typeof shortname !== "string") throw new Error();
+		if (!fullname || typeof fullname !== "string") throw new Error();
+		if (!address || typeof address !== "string") throw new Error();
+		if (typeof lat !== "number" || isNaN(lat)) throw new Error();
+		if (typeof lon !== "number" || isNaN(lon)) throw new Error();
+	}
+
+	function validateRoom( // ai gen
+		building: string,
+		number: string,
+		seats: number,
+		type: string,
+		furniture: string,
+		href: string
+	) {
+		if (!building || typeof building !== "string") throw new Error();
+		if (!number || typeof number !== "string") throw new Error();
+		if (typeof seats !== "number" || isNaN(seats) || seats < 0) throw new Error();
+		if (!type || typeof type !== "string") throw new Error();
+		if (!furniture || typeof furniture !== "string") throw new Error();
+		if (!href || typeof href !== "string") throw new Error();
 	}
 
 	async function processCourse(dataset: DatasetC, zip: any) {
