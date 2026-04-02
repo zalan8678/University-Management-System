@@ -1246,6 +1246,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	app.post("/api/v2/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
 
+		// TODO: Make routes thin by moving validation out of route
 		// 1. Basic Validation
 		const fields: Record<string, string> = {};
 		if (kind === undefined) fields.kind = "required but missing";
