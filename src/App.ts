@@ -1245,23 +1245,15 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 	app.post("/api/v2/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
-
 		// TODO: Make routes thin by moving validation out of route
-		// 1. Basic Validation
-		const fields: Record<string, string> = {};
-		if (kind === undefined) fields.kind = "required but missing";
-		else if (kind !== "course_offerings" && kind !== "facilities") {
-			fields.kind = "expected to be course_offerings or facilities";
-		}
-
-		if (query === undefined) fields.query = "required but missing";
-		else if (typeof query !== "object" || query === null) fields.query = "expected an object";
-
-		if (Object.keys(fields).length > 0) {
-			res.status(422).send({ error: "Validation failed", fields });
+		const validationBasic = validateSearchBasic(req.body);
+		if (!validationBasic.valid) {
+			res.status(422).send({
+				error: "Validation failed",
+				fields: validationBasic.fields,
+			});
 			return;
 		}
-
 		try {
 			// 2. Validate and Execute Query
 			const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
@@ -1286,6 +1278,27 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			res.status(400).send({ error: "Invalid query", message: err.message });
 		}
 	});
+	function validateSearchBasic(body: any) {
+		const { kind, query } = body ?? {};
+
+		const fields: Record<string, string> = {};
+
+		if (kind === undefined) fields.kind = "required but missing";
+		else if (kind !== "course_offerings" && kind !== "facilities") {
+			fields.kind = "expected to be course_offerings or facilities";
+		}
+
+		if (query === undefined) fields.query = "required but missing";
+		else if (typeof query !== "object" || query === null) {
+			fields.query = "expected an object";
+		}
+
+		if (Object.keys(fields).length > 0) {
+			return { valid: false, fields };
+		}
+
+		return { valid: true, kind, query };
+	}
 	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
