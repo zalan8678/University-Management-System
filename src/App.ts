@@ -1254,28 +1254,21 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			});
 			return;
 		}
+		// 2. Validate and Execute Query
+
 		try {
-			// 2. Validate and Execute Query
-			const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
-			const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
-
-			validateQueryV2(query, currentMFields, currentSFields);
-
-			const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
-			const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
-
-			if (results.length > 5000) {
+			const results = await searchService(kind, query);
+			res.status(200).send(results);
+		} catch (err: any) {
+			if (err.message.includes("5000")) {
 				res.status(413).send({
 					error: "Too many results",
 					message: "Query would return more than 5000 results",
 					limit: 5000,
 				});
-				return;
+			} else {
+				res.status(400).send({ error: "Invalid query", message: err.message });
 			}
-
-			res.status(200).send(results);
-		} catch (err: any) {
-			res.status(400).send({ error: "Invalid query", message: err.message });
 		}
 	});
 	function validateSearchBasic(body: any) {
@@ -1299,6 +1292,25 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return { valid: true, kind, query };
 	}
+
+
+	async function searchService(kind: string, query: any) {
+		const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
+		const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
+
+		validateQueryV2(query, currentMFields, currentSFields);
+
+		const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
+		const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
+
+		if (results.length > 5000) {
+			throw new Error("Query would return more than 5000 results");
+		}
+
+		return results;
+	}
+
+
 	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
