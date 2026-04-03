@@ -1245,23 +1245,17 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	});
 	app.post("/api/v2/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
-
-		// 1. Basic Validation
-		const fields: Record<string, string> = {};
-		if (kind === undefined) fields.kind = "required but missing";
-		else if (kind !== "course_offerings" && kind !== "facilities") {
-			fields.kind = "expected to be course_offerings or facilities";
-		}
-
-		if (query === undefined) fields.query = "required but missing";
-		else if (typeof query !== "object" || query === null) fields.query = "expected an object";
-
-		if (Object.keys(fields).length > 0) {
-			res.status(422).send({ error: "Validation failed", fields });
+		// TODO: Make routes thin by moving validation out of route
+		const validationBasic = validateSearchBasic(req.body);
+		if (!validationBasic.valid) {
+			res.status(422).send({
+				error: "Validation failed",
+				fields: validationBasic.fields,
+			});
 			return;
 		}
-
 		// 2. Validate and Execute Query
+
 		try {
 			const results = await searchService(kind, query);
 			res.status(200).send(results);
@@ -1277,6 +1271,28 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			}
 		}
 	});
+	function validateSearchBasic(body: any) {
+		const { kind, query } = body ?? {};
+
+		const fields: Record<string, string> = {};
+
+		if (kind === undefined) fields.kind = "required but missing";
+		else if (kind !== "course_offerings" && kind !== "facilities") {
+			fields.kind = "expected to be course_offerings or facilities";
+		}
+
+		if (query === undefined) fields.query = "required but missing";
+		else if (typeof query !== "object" || query === null) {
+			fields.query = "expected an object";
+		}
+
+		if (Object.keys(fields).length > 0) {
+			return { valid: false, fields };
+		}
+
+		return { valid: true, kind, query };
+	}
+
 
 	async function searchService(kind: string, query: any) {
 		const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
@@ -1293,6 +1309,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return results;
 	}
+
 
 	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
