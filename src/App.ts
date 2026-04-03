@@ -1262,9 +1262,20 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 
 		// 2. Validate and Execute Query
-        const results = await searchService(kind, query);
-        res.status(200).send(results);
-
+        try {
+            const results = await searchService(kind, query);
+            res.status(200).send(results);
+        } catch (err: any) {
+            if (err.message.includes("5000")) {
+                res.status(413).send({
+                    error: "Too many results",
+                    message: "Query would return more than 5000 results",
+                    limit: 5000,
+                });
+            } else {
+                res.status(400).send({ error: "Invalid query", message: err.message });
+            }
+        }
 	});
 
 	async function searchService(kind: string, query: any) {
@@ -1276,6 +1287,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
 		const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
 
+        if (results.length > 5000) {
+            throw new Error("Query would return more than 5000 results");
+        }
+        
 		return results;
 	}
 
