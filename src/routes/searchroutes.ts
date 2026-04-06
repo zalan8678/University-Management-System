@@ -1,10 +1,10 @@
-import express from "express";
-import {searchController} from "../controllers/searchController";
+// import express from "express";
+// import {searchController} from "../controllers/searchController";
 
-const router = express.Router();
+// const router = express.Router();
 
-router.post("/api/v2/search", searchController);
+// router.post("/api/v2/search", searchController);
 
-export default router;
+// export default router;
 
-// 1. ROUTE
+// // 1. ROUTE
