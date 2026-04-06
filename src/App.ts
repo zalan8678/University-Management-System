@@ -4,7 +4,7 @@ import cors from "cors";
 // import path from "path";
 // import Decimal from "decimal.js";
 import searchRoutes from "./routes/searchRoutes";
-import Model, { initModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
+import Model, { initModel, getModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
 
 /**
  * Express application.
@@ -45,8 +45,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// Ensure the data directory exists
 	await fs.mkdir(datadir, { recursive: true });
 
-	const model = await Model.readModel(datadir);
 	await initModel(datadir);
+    const model = getModel(); 
 
 	// Make files in ../frontend/public accessible at http://localhost:<port>/
 	app.use(express.static("frontend/public"));
