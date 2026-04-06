@@ -1,6 +1,7 @@
 // route -> 2. CONTROLLER -> service
 
 import { Request, Response } from "express";
+import { validateSearchBasic } from "../middleware/validateSearch";
 import { searchService } from "../services/searchService";
 
 export async function searchController(req: Request, res: Response) {
@@ -28,27 +29,4 @@ export async function searchController(req: Request, res: Response) {
 			res.status(400).send({ error: "Invalid query", message: err.message });
 		}
 	}
-}
-
-function validateSearchBasic(body: any) {
-	// maybe move out?
-	const { kind, query } = body ?? {};
-
-	const fields: Record<string, string> = {};
-
-	if (kind === undefined) fields.kind = "required but missing";
-	else if (kind !== "course_offerings" && kind !== "facilities") {
-		fields.kind = "expected to be course_offerings or facilities";
-	}
-
-	if (query === undefined) fields.query = "required but missing";
-	else if (typeof query !== "object" || query === null) {
-		fields.query = "expected an object";
-	}
-
-	if (Object.keys(fields).length > 0) {
-		return { valid: false, fields };
-	}
-
-	return { valid: true, kind, query };
 }
