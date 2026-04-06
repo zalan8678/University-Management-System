@@ -1,6 +1,7 @@
 import { validateQueryV2 } from "./searchValidation";
 import { executeQueryV2 } from "./searchExecution";
 import { getModel } from "../models/Model";
+import { TooManyResultsError} from "../middleware/errors";
 
 const mfields = ["avg", "pass", "fail", "audit", "year"];
 const sfields = ["title", "dept", "code", "instructor"];
@@ -19,7 +20,7 @@ export async function searchService(kind: string, query: any) {
 	const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
 
 	if (results.length > 5000) {
-		throw new Error("Query would return more than 5000 results");
+		throw new TooManyResultsError("Query would return more than 5000 results");
 	}
 
 	return results;

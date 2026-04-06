@@ -4,7 +4,7 @@ import cors from "cors";
 
 // import path from "path";
 // import Decimal from "decimal.js";
-import searchRoutes from "./routes/searchRoutes";
+import searchRoutes from "./routes/searchroutes";
 import Model, { initModel, getModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
 
 import path from "path";
@@ -54,7 +54,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	await fs.mkdir(datadir, { recursive: true });
 
 	await initModel(datadir);
-    const model = getModel(); 
+    const model = getModel();
 
 	// Make files in ../frontend/public accessible at http://localhost:<port>/
 	app.use(express.static("frontend/public"));
