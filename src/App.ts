@@ -4,7 +4,7 @@ import cors from "cors";
 
 // import path from "path";
 // import Decimal from "decimal.js";
-import searchRoutes from "./routes/searchRoutes";
+import searchRoutes from "./routes/searchroutes";
 import Model, { initModel, getModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
 
 import path from "path";
