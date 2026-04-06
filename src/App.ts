@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import path from "path";
 import Decimal from "decimal.js";
+import {GrammarError, TooManyResultsError, ValidationError} from "./middleware/errors";
 // import searchRoutes from "./routes/searchRoutes";
 
 /**
@@ -1255,7 +1256,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
 
 		if (results.length > 5000) {
-			throw new Error("Query would return more than 5000 results");
+			throw new TooManyResultsError("Query would return more than 5000 results");
 		}
 
 		return results;
@@ -1265,7 +1266,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	function validateMComparison(type: string, obj: any) {
 		const keys = Object.keys(obj);
 		if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
-			throw new Error(`${type} must be an object with one mfield of type number`);
+			throw new GrammarError(`${type} must be an object with one mfield of type number`);
 		}
 	}
 
@@ -1273,7 +1274,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		if (!query.WHERE || typeof query.WHERE !== "object") throw new Error("Missing WHERE");
 		if (!query.OPTIONS || typeof query.OPTIONS !== "object") throw new Error("Missing OPTIONS");
 		if (!query.OPTIONS.COLUMNS || !Array.isArray(query.OPTIONS.COLUMNS) || query.OPTIONS.COLUMNS.length === 0) {
-			throw new Error("Missing COLUMNS or empty array");
+			throw new GrammarError("Missing COLUMNS or empty array");
 		}
 
 		const allValidKeys = [...mfs, ...sfs];
@@ -1288,10 +1289,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				!Array.isArray(query.TRANSFORMATIONS.GROUP) ||
 				query.TRANSFORMATIONS.GROUP.length === 0
 			) {
-				throw new Error("Missing GROUP in TRANSFORMATIONS");
+				throw new GrammarError("Missing GROUP in TRANSFORMATIONS");
 			}
 			if (!query.TRANSFORMATIONS.APPLY || !Array.isArray(query.TRANSFORMATIONS.APPLY)) {
-				throw new Error("Missing APPLY in TRANSFORMATIONS");
+				throw new GrammarError("Missing APPLY in TRANSFORMATIONS");
 			}
 
 			const groupKeys = query.TRANSFORMATIONS.GROUP;
@@ -1315,24 +1316,24 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 				const tokenObj = rule[applyKey];
 				if (typeof tokenObj !== "object" || Object.keys(tokenObj).length !== 1)
-					throw new Error("Invalid APPLY token object");
+					throw new GrammarError("Invalid APPLY token object");
 
 				const token = Object.keys(tokenObj)[0];
 				const targetKey = tokenObj[token];
 
 				if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token)) throw new Error(`Invalid APPLY token: ${token}`);
-				if (!allValidKeys.includes(targetKey)) throw new Error(`Invalid target key in APPLY: ${targetKey}`);
+				if (!allValidKeys.includes(targetKey)) throw new GrammarError(`Invalid target key in APPLY: ${targetKey}`);
 
 				// MAX, MIN, AVG, SUM can ONLY target mfields (numbers)
 				if (["MAX", "MIN", "AVG", "SUM"].includes(token)) {
-					if (!mfs.includes(targetKey)) throw new Error(`${token} must target a numeric field (mfield)`);
+					if (!mfs.includes(targetKey)) throw new GrammarError(`${token} must target a numeric field (mfield)`);
 				}
 			}
 
 			// All columns must be in GROUP or APPLY
 			for (const col of query.OPTIONS.COLUMNS) {
 				if (!groupKeys.includes(col) && !applyKeys.has(col)) {
-					throw new Error("When TRANSFORMATIONS is present, all COLUMNS must be in GROUP or APPLY");
+					throw new GrammarError("When TRANSFORMATIONS is present, all COLUMNS must be in GROUP or APPLY");
 				}
 			}
 		} else {
@@ -1353,13 +1354,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 				// Multi-key sort
 				if (!order.dir || !["UP", "DOWN"].includes(order.dir)) throw new Error("Invalid ORDER direction");
 				if (!order.keys || !Array.isArray(order.keys) || order.keys.length === 0)
-					throw new Error("Invalid ORDER keys array");
+					throw new GrammarError("Invalid ORDER keys array");
 
 				for (const key of order.keys) {
 					if (!query.OPTIONS.COLUMNS.includes(key)) throw new Error(`ORDER key '${key}' must be in COLUMNS`);
 				}
 			} else {
-				throw new Error("ORDER must be a string or an object with 'dir' and 'keys'");
+				throw new GrammarError("ORDER must be a string or an object with 'dir' and 'keys'");
 			}
 		}
 	}
@@ -1395,24 +1396,24 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		if (key === "IS") {
 			if (typeof value !== "object" || Object.keys(value).length !== 1)
-				throw new Error(`IS must be an object with exactly one key`);
+				throw new GrammarError(`IS must be an object with exactly one key`);
 			const field = Object.keys(value)[0];
-			if (!sfs.includes(field)) throw new Error(`IS targets an invalid sfield (or wrong dataset field): ${field}`);
+			if (!sfs.includes(field)) throw new GrammarError(`IS targets an invalid sfield (or wrong dataset field): ${field}`);
 
 			const strVal = value[field];
 			if (typeof strVal !== "string") throw new Error(`IS value must be a string`);
 
 			const starCount = (strVal.match(/\*/g) || []).length;
 			if (starCount > 2 || (starCount === 2 && !(strVal.startsWith("*") && strVal.endsWith("*")))) {
-				throw new Error("IS asterisks can only be the first or last character");
+				throw new GrammarError("IS asterisks can only be the first or last character");
 			}
 			if (strVal.length > 2 && strVal.slice(1, -1).includes("*")) {
-				throw new Error("IS asterisks can only be the first or last character");
+				throw new GrammarError("IS asterisks can only be the first or last character");
 			}
 			return;
 		}
 
-		throw new Error(`Unknown filter key: ${key}`);
+		throw new GrammarError(`Unknown filter key: ${key}`);
 	}
 
 	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
