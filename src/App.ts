@@ -56,7 +56,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	const model = getModel();
 
-
 	// Make files in ../frontend/public accessible at http://localhost:<port>/
 	app.use(express.static("frontend/public"));
 

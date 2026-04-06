@@ -1,4 +1,4 @@
-import { GrammarError} from "../middleware/errors";
+import { GrammarError } from "../middleware/errors";
 
 export function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
 	if (!query.WHERE || typeof query.WHERE !== "object") throw new GrammarError("Missing WHERE");
@@ -51,7 +51,8 @@ export function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
 			const token = Object.keys(tokenObj)[0];
 			const targetKey = tokenObj[token];
 
-			if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token)) throw new GrammarError(`Invalid APPLY token: ${token}`);
+			if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token))
+				throw new GrammarError(`Invalid APPLY token: ${token}`);
 			if (!allValidKeys.includes(targetKey)) throw new GrammarError(`Invalid target key in APPLY: ${targetKey}`);
 
 			// MAX, MIN, AVG, SUM can ONLY target mfields (numbers)
@@ -109,7 +110,8 @@ function validateFilterV2(filter: any, mfs: string[], sfs: string[]) {
 	}
 
 	if (key === "NOT") {
-		if (typeof value !== "object" || Object.keys(value).length === 0) throw new GrammarError("NOT must be a non-empty object");
+		if (typeof value !== "object" || Object.keys(value).length === 0)
+			throw new GrammarError("NOT must be a non-empty object");
 		validateFilterV2(value, mfs, sfs);
 		return;
 	}
@@ -118,7 +120,8 @@ function validateFilterV2(filter: any, mfs: string[], sfs: string[]) {
 		if (typeof value !== "object" || Object.keys(value).length !== 1)
 			throw new GrammarError(`${key} must be an object with exactly one key`);
 		const field = Object.keys(value)[0];
-		if (!mfs.includes(field)) throw new GrammarError(`${key} targets an invalid mfield (or wrong dataset field): ${field}`);
+		if (!mfs.includes(field))
+			throw new GrammarError(`${key} targets an invalid mfield (or wrong dataset field): ${field}`);
 		if (typeof value[field] !== "number") throw new GrammarError(`${key} value must be a number`);
 		return;
 	}
