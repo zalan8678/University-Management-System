@@ -1,7 +1,7 @@
 import { validateQueryV2 } from "./searchValidation";
 import { executeQueryV2 } from "./searchExecution";
 import { getModel } from "../models/Model";
-import { TooManyResultsError} from "../middleware/errors";
+import { TooManyResultsError } from "../middleware/errors";
 
 const mfields = ["avg", "pass", "fail", "audit", "year"];
 const sfields = ["title", "dept", "code", "instructor"];
