@@ -4,6 +4,7 @@ import cors from "cors";
 import path from "path";
 import Decimal from "decimal.js";
 import { GrammarError, TooManyResultsError, ValidationError } from "./middleware/errors";
+import { handleError } from "./middleware/handleErrors";
 // import searchRoutes from "./routes/searchRoutes";
 
 /**
@@ -1213,15 +1214,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			const results = await searchService(kind, query);
 			res.status(200).send(results);
 		} catch (err: any) {
-			if (err.message.includes("5000")) {
-				res.status(413).send({
-					error: "Too many results",
-					message: "Query would return more than 5000 results",
-					limit: 5000,
-				});
-			} else {
-				res.status(400).send({ error: "Invalid query", message: err.message });
-			}
+			handleError(err, res);
 		}
 	});
 	function validateSearchBasic(body: any) {
