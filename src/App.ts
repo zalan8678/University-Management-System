@@ -1190,59 +1190,8 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		});
 	});
 
-	// Start of AI Code
-	app.post("/api/v1/search", async (req, res) => {
-		const { kind, query } = req.body ?? {};
+	///// START OF C3 GRADED AREA - V2 SEARCH /////
 
-		// ---------------- VALIDATION ----------------
-
-		// Top-level validation
-		const fields: Record<string, string> = {};
-
-		if (kind === undefined) {
-			fields.kind = "required but missing";
-		} else if (kind !== "course_offerings") {
-			fields.kind = "expected to be course_offerings";
-		}
-
-		if (query === undefined) {
-			fields.query = "required but missing";
-		} else if (typeof query !== "object" || query === null) {
-			fields.query = "expected an object";
-		}
-
-		if (Object.keys(fields).length > 0) {
-			res.status(422).send({
-				error: "Validation failed",
-				fields,
-			});
-			return;
-		}
-
-		try {
-			validateQuery(query);
-
-			const results = executeQuery(query);
-
-			if (results.length > 5000) {
-				res.status(413).send({
-					error: "Too many results",
-					message: "Query would return more than 5000 results",
-					limit: 5000,
-				});
-				return;
-			}
-
-			res.status(200).send(results);
-			return;
-		} catch (err: any) {
-			res.status(400).send({
-				error: "Invalid query",
-				message: err.message,
-			});
-			return;
-		}
-	});
 	app.post("/api/v2/search", async (req, res) => {
 		const { kind, query } = req.body ?? {};
 		// TODO: Make routes thin by moving validation out of route
@@ -1293,7 +1242,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		return { valid: true, kind, query };
 	}
 
-
 	async function searchService(kind: string, query: any) {
 		const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
 		const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
@@ -1309,7 +1257,6 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return results;
 	}
-
 
 	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	function validateMComparison(type: string, obj: any) {
@@ -1407,93 +1354,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 			throw new Error("IS asterisks can only be first or last character");
 		}
 	}
-	function executeQuery(query: any) {
-		const sections = model.getSections();
 
-		const filtered = sections.filter((section) => evaluateFilter(query.WHERE, section));
-
-		let projected = filtered.map((section) => projectRow(section, query.OPTIONS.COLUMNS));
-
-		if (query.OPTIONS.ORDER) {
-			const key = query.OPTIONS.ORDER;
-			projected.sort((a, b) => {
-				if (a[key] < b[key]) return -1;
-				if (a[key] > b[key]) return 1;
-
-				if (a.id < b.id) return -1;
-				if (a.id > b.id) return 1;
-
-				return 0;
-			});
-		}
-
-		return projected;
-	}
-	function evaluateFilter(filter: any, section: Section): boolean {
-		if (Object.keys(filter).length === 0) return true;
-
-		const key = Object.keys(filter)[0];
-		const value = filter[key];
-
-		if (key === "AND") {
-			return value.every((f: any) => evaluateFilter(f, section));
-		}
-
-		if (key === "OR") {
-			return value.some((f: any) => evaluateFilter(f, section));
-		}
-
-		if (key === "NOT") {
-			return !evaluateFilter(value, section);
-		}
-
-		if (key === "LT") {
-			const field = Object.keys(value)[0];
-			return section[field as keyof Section] < value[field];
-		}
-
-		if (key === "GT") {
-			const field = Object.keys(value)[0]; // e.g., "avg"
-			return section[field as keyof Section] > value[field];
-		}
-
-		if (key === "EQ") {
-			const field = Object.keys(value)[0];
-			return section[field as keyof Section] === value[field];
-		}
-
-		if (key === "IS") {
-			const field = Object.keys(value)[0];
-			const pattern = value[field];
-
-			// Logic to handle course-level fields vs section-level fields
-			if (sfields.includes(field) && field !== "instructor") {
-				const course = model.getCourseById(section.courseId);
-				const val = course ? (course as any)[field] : "";
-				return matchWildcard(val, pattern);
-			}
-
-			return matchWildcard(section[field as keyof Section] as string, pattern);
-		}
-		return false;
-	}
-	function matchWildcard(text: string, pattern: string): boolean {
-		if (!pattern.includes("*")) return text === pattern;
-
-		if (pattern.startsWith("*") && pattern.endsWith("*")) {
-			return text.includes(pattern.slice(1, -1));
-		}
-
-		if (pattern.startsWith("*")) {
-			return text.endsWith(pattern.slice(1));
-		}
-
-		if (pattern.endsWith("*")) {
-			return text.startsWith(pattern.slice(0, -1));
-		}
-
-		return false;
-	}
 	function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
 		if (!query.WHERE || typeof query.WHERE !== "object") throw new Error("Missing WHERE");
 		if (!query.OPTIONS || typeof query.OPTIONS !== "object") throw new Error("Missing OPTIONS");
@@ -1639,27 +1500,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		throw new Error(`Unknown filter key: ${key}`);
 	}
-	function projectRow(section: Section, columns: string[]) {
-		const course = model.getCourseById(section.courseId);
 
-		const row: any = {};
-
-		for (const col of columns) {
-			if (mfields.includes(col)) {
-				row[col] = section[col as keyof Section];
-			} else if (col === "title") {
-				row[col] = course?.title;
-			} else if (col === "dept") {
-				row[col] = course?.dept;
-			} else if (col === "code") {
-				row[col] = course?.code;
-			} else if (col === "instructor") {
-				row[col] = section.instructor;
-			}
-		}
-
-		return row;
-	} // End of AI Code
 	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
 		// 1. Filter
 		let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
@@ -1798,6 +1639,24 @@ export async function createApp(config: AppConfig): Promise<Application> {
 		}
 	}
 
+	function matchWildcard(text: string, pattern: string): boolean {
+		if (!pattern.includes("*")) return text === pattern;
+
+		if (pattern.startsWith("*") && pattern.endsWith("*")) {
+			return text.includes(pattern.slice(1, -1));
+		}
+
+		if (pattern.startsWith("*")) {
+			return text.endsWith(pattern.slice(1));
+		}
+
+		if (pattern.endsWith("*")) {
+			return text.startsWith(pattern.slice(0, -1));
+		}
+
+		return false;
+	}
+
 	function evaluateFilterV2(filter: any, item: any, kind: string): boolean {
 		if (Object.keys(filter).length === 0) return true;
 
@@ -1862,6 +1721,158 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 		return row;
 	}
+
+	///// END OF V2 SEARCH GRADED AREA /////
+
+	///// V1 SEARCH - DEPRECATED /////
+
+	// Start of AI Code
+	app.post("/api/v1/search", async (req, res) => {
+		const { kind, query } = req.body ?? {};
+
+		// ---------------- VALIDATION ----------------
+
+		// Top-level validation
+		const fields: Record<string, string> = {};
+
+		if (kind === undefined) {
+			fields.kind = "required but missing";
+		} else if (kind !== "course_offerings") {
+			fields.kind = "expected to be course_offerings";
+		}
+
+		if (query === undefined) {
+			fields.query = "required but missing";
+		} else if (typeof query !== "object" || query === null) {
+			fields.query = "expected an object";
+		}
+
+		if (Object.keys(fields).length > 0) {
+			res.status(422).send({
+				error: "Validation failed",
+				fields,
+			});
+			return;
+		}
+
+		try {
+			validateQuery(query);
+
+			const results = executeQuery(query);
+
+			if (results.length > 5000) {
+				res.status(413).send({
+					error: "Too many results",
+					message: "Query would return more than 5000 results",
+					limit: 5000,
+				});
+				return;
+			}
+
+			res.status(200).send(results);
+			return;
+		} catch (err: any) {
+			res.status(400).send({
+				error: "Invalid query",
+				message: err.message,
+			});
+			return;
+		}
+	});
+
+	function executeQuery(query: any) {
+		const sections = model.getSections();
+
+		const filtered = sections.filter((section) => evaluateFilter(query.WHERE, section));
+
+		let projected = filtered.map((section) => projectRow(section, query.OPTIONS.COLUMNS));
+
+		if (query.OPTIONS.ORDER) {
+			const key = query.OPTIONS.ORDER;
+			projected.sort((a, b) => {
+				if (a[key] < b[key]) return -1;
+				if (a[key] > b[key]) return 1;
+
+				if (a.id < b.id) return -1;
+				if (a.id > b.id) return 1;
+
+				return 0;
+			});
+		}
+
+		return projected;
+	}
+	function evaluateFilter(filter: any, section: Section): boolean {
+		if (Object.keys(filter).length === 0) return true;
+
+		const key = Object.keys(filter)[0];
+		const value = filter[key];
+
+		if (key === "AND") {
+			return value.every((f: any) => evaluateFilter(f, section));
+		}
+
+		if (key === "OR") {
+			return value.some((f: any) => evaluateFilter(f, section));
+		}
+
+		if (key === "NOT") {
+			return !evaluateFilter(value, section);
+		}
+
+		if (key === "LT") {
+			const field = Object.keys(value)[0];
+			return section[field as keyof Section] < value[field];
+		}
+
+		if (key === "GT") {
+			const field = Object.keys(value)[0]; // e.g., "avg"
+			return section[field as keyof Section] > value[field];
+		}
+
+		if (key === "EQ") {
+			const field = Object.keys(value)[0];
+			return section[field as keyof Section] === value[field];
+		}
+
+		if (key === "IS") {
+			const field = Object.keys(value)[0];
+			const pattern = value[field];
+
+			// Logic to handle course-level fields vs section-level fields
+			if (sfields.includes(field) && field !== "instructor") {
+				const course = model.getCourseById(section.courseId);
+				const val = course ? (course as any)[field] : "";
+				return matchWildcard(val, pattern);
+			}
+
+			return matchWildcard(section[field as keyof Section] as string, pattern);
+		}
+		return false;
+	}
+
+	function projectRow(section: Section, columns: string[]) {
+		const course = model.getCourseById(section.courseId);
+
+		const row: any = {};
+
+		for (const col of columns) {
+			if (mfields.includes(col)) {
+				row[col] = section[col as keyof Section];
+			} else if (col === "title") {
+				row[col] = course?.title;
+			} else if (col === "dept") {
+				row[col] = course?.dept;
+			} else if (col === "code") {
+				row[col] = course?.code;
+			} else if (col === "instructor") {
+				row[col] = section.instructor;
+			}
+		}
+
+		return row;
+	} // End of AI Code
+
 	// 5
 	app.get("/api/v2/buildings", (req, res) => {
 		// get courses
