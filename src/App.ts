@@ -53,7 +53,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	await fs.mkdir(datadir, { recursive: true });
 
 	await initModel(datadir);
+
 	const model = getModel();
+
 
 	// Make files in ../frontend/public accessible at http://localhost:<port>/
 	app.use(express.static("frontend/public"));
