@@ -1,6 +1,9 @@
 // Start of AI Code
 export class ValidationError extends Error {
-	constructor(public message: string, public fields?: Record<string, string>) {
+	constructor(
+		public message: string,
+		public fields?: Record<string, string>
+	) {
 		super(message);
 		this.name = "ValidationError";
 	}
@@ -14,7 +17,10 @@ export class TooManyResultsError extends Error {
 // End of AI Code
 
 export class NotFoundError extends Error {
-	constructor(public message: string, public fields?: Record<string, string>) {
+	constructor(
+		public message: string,
+		public fields?: Record<string, string>
+	) {
 		super(message);
 		this.name = "NotFoundError";
 	}

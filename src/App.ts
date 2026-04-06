@@ -1,9 +1,10 @@
 import fs from "fs/promises";
 import express from "express";
 import cors from "cors";
-import path from "path";
-import Decimal from "decimal.js";
-// import searchRoutes from "./routes/searchRoutes";
+// import path from "path";
+// import Decimal from "decimal.js";
+import searchRoutes from "./routes/searchRoutes";
+import Model, { initModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
 
 /**
  * Express application.
@@ -45,6 +46,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	await fs.mkdir(datadir, { recursive: true });
 
 	const model = await Model.readModel(datadir);
+	await initModel(datadir);
 
 	// Make files in ../frontend/public accessible at http://localhost:<port>/
 	app.use(express.static("frontend/public"));
@@ -55,7 +57,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	app.use(express.raw({ type: "application/*", limit: "10mb" }));
 	app.use(cors());
 
-	// app.use(searchRoutes); // hooks up searchroutes
+	app.use(searchRoutes); // hooks up searchroutes
 
 	// Basic message to verify REST API is available
 	// You can see the message by going to http://localhost:<port>/api
@@ -1195,446 +1197,446 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	///// START OF C3 GRADED AREA - V2 SEARCH /////
 
-	app.post("/api/v2/search", async (req, res) => {
-		const { kind, query } = req.body ?? {};
-		// TODO: Make routes thin by moving validation out of route
-		const validationBasic = validateSearchBasic(req.body);
-		if (!validationBasic.valid) {
-			res.status(422).send({
-				error: "Validation failed",
-				fields: validationBasic.fields,
-			});
-			return;
-		}
-		// 2. Validate and Execute Query
-
-		try {
-			const results = await searchService(kind, query);
-			res.status(200).send(results);
-		} catch (err: any) {
-			if (err.message.includes("5000")) {
-				res.status(413).send({
-					error: "Too many results",
-					message: "Query would return more than 5000 results",
-					limit: 5000,
-				});
-			} else {
-				res.status(400).send({ error: "Invalid query", message: err.message });
-			}
-		}
-	});
-	function validateSearchBasic(body: any) {
-		const { kind, query } = body ?? {};
-
-		const fields: Record<string, string> = {};
-
-		if (kind === undefined) fields.kind = "required but missing";
-		else if (kind !== "course_offerings" && kind !== "facilities") {
-			fields.kind = "expected to be course_offerings or facilities";
-		}
-
-		if (query === undefined) fields.query = "required but missing";
-		else if (typeof query !== "object" || query === null) {
-			fields.query = "expected an object";
-		}
-
-		if (Object.keys(fields).length > 0) {
-			return { valid: false, fields };
-		}
-
-		return { valid: true, kind, query };
-	}
-
-	async function searchService(kind: string, query: any) {
-		const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
-		const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
-
-		validateQueryV2(query, currentMFields, currentSFields);
-
-		const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
-		const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
-
-		if (results.length > 5000) {
-			throw new Error("Query would return more than 5000 results");
-		}
-
-		return results;
-	}
-
-	// ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
-	function validateMComparison(type: string, obj: any) {
-		const keys = Object.keys(obj);
-		if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
-			throw new Error(`${type} must be an object with one mfield of type number`);
-		}
-	}
-
-	function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
-		if (!query.WHERE || typeof query.WHERE !== "object") throw new Error("Missing WHERE");
-		if (!query.OPTIONS || typeof query.OPTIONS !== "object") throw new Error("Missing OPTIONS");
-		if (!query.OPTIONS.COLUMNS || !Array.isArray(query.OPTIONS.COLUMNS) || query.OPTIONS.COLUMNS.length === 0) {
-			throw new Error("Missing COLUMNS or empty array");
-		}
-
-		const allValidKeys = [...mfs, ...sfs];
-
-		// 1. Validate WHERE Deeply (Ensures no mixing of dataset fields and correct types)
-		validateFilterV2(query.WHERE, mfs, sfs);
-
-		// 2. Validate Transformations
-		if (query.TRANSFORMATIONS) {
-			if (
-				!query.TRANSFORMATIONS.GROUP ||
-				!Array.isArray(query.TRANSFORMATIONS.GROUP) ||
-				query.TRANSFORMATIONS.GROUP.length === 0
-			) {
-				throw new Error("Missing GROUP in TRANSFORMATIONS");
-			}
-			if (!query.TRANSFORMATIONS.APPLY || !Array.isArray(query.TRANSFORMATIONS.APPLY)) {
-				throw new Error("Missing APPLY in TRANSFORMATIONS");
-			}
-
-			const groupKeys = query.TRANSFORMATIONS.GROUP;
-			const applyKeys = new Set<string>();
-
-			// Validate GROUP keys
-			for (const key of groupKeys) {
-				if (!allValidKeys.includes(key)) throw new Error(`Invalid GROUP key: ${key}`);
-			}
-
-			// Validate APPLY rules
-			for (const rule of query.TRANSFORMATIONS.APPLY) {
-				if (typeof rule !== "object" || Object.keys(rule).length !== 1) throw new Error("Invalid APPLY rule format");
-
-				const applyKey = Object.keys(rule)[0];
-
-				// Apply keys cannot have underscores and must be unique
-				if (applyKey.includes("_")) throw new Error("applykey cannot contain underscores");
-				if (applyKeys.has(applyKey)) throw new Error(`Duplicate applykey found: ${applyKey}`);
-				applyKeys.add(applyKey);
-
-				const tokenObj = rule[applyKey];
-				if (typeof tokenObj !== "object" || Object.keys(tokenObj).length !== 1)
-					throw new Error("Invalid APPLY token object");
-
-				const token = Object.keys(tokenObj)[0];
-				const targetKey = tokenObj[token];
-
-				if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token)) throw new Error(`Invalid APPLY token: ${token}`);
-				if (!allValidKeys.includes(targetKey)) throw new Error(`Invalid target key in APPLY: ${targetKey}`);
-
-				// MAX, MIN, AVG, SUM can ONLY target mfields (numbers)
-				if (["MAX", "MIN", "AVG", "SUM"].includes(token)) {
-					if (!mfs.includes(targetKey)) throw new Error(`${token} must target a numeric field (mfield)`);
-				}
-			}
-
-			// All columns must be in GROUP or APPLY
-			for (const col of query.OPTIONS.COLUMNS) {
-				if (!groupKeys.includes(col) && !applyKeys.has(col)) {
-					throw new Error("When TRANSFORMATIONS is present, all COLUMNS must be in GROUP or APPLY");
-				}
-			}
-		} else {
-			// No Transformations: Columns must be raw fields
-			for (const col of query.OPTIONS.COLUMNS) {
-				if (!allValidKeys.includes(col)) throw new Error(`Unknown key in COLUMNS: ${col}`);
-			}
-		}
-
-		// 3. Validate Order
-		if (query.OPTIONS.ORDER !== undefined) {
-			const order = query.OPTIONS.ORDER;
-
-			if (typeof order === "string") {
-				// Single key sort
-				if (!query.OPTIONS.COLUMNS.includes(order)) throw new Error("ORDER key must be in COLUMNS");
-			} else if (typeof order === "object" && order !== null) {
-				// Multi-key sort
-				if (!order.dir || !["UP", "DOWN"].includes(order.dir)) throw new Error("Invalid ORDER direction");
-				if (!order.keys || !Array.isArray(order.keys) || order.keys.length === 0)
-					throw new Error("Invalid ORDER keys array");
-
-				for (const key of order.keys) {
-					if (!query.OPTIONS.COLUMNS.includes(key)) throw new Error(`ORDER key '${key}' must be in COLUMNS`);
-				}
-			} else {
-				throw new Error("ORDER must be a string or an object with 'dir' and 'keys'");
-			}
-		}
-	}
-
-	function validateFilterV2(filter: any, mfs: string[], sfs: string[]) {
-		if (Object.keys(filter).length === 0) return; // Empty WHERE {} is valid
-		if (Object.keys(filter).length > 1) throw new Error("WHERE/Logic blocks must contain exactly one key");
-
-		const key = Object.keys(filter)[0];
-		const value = filter[key];
-
-		if (key === "AND" || key === "OR") {
-			if (!Array.isArray(value) || value.length === 0) throw new Error(`${key} must be a non-empty array`);
-			value.forEach((f) => validateFilterV2(f, mfs, sfs));
-			return;
-		}
-
-		if (key === "NOT") {
-			if (typeof value !== "object" || Object.keys(value).length === 0)
-				throw new Error("NOT must be a non-empty object");
-			validateFilterV2(value, mfs, sfs);
-			return;
-		}
-
-		if (["LT", "GT", "EQ"].includes(key)) {
-			if (typeof value !== "object" || Object.keys(value).length !== 1)
-				throw new Error(`${key} must be an object with exactly one key`);
-			const field = Object.keys(value)[0];
-			if (!mfs.includes(field)) throw new Error(`${key} targets an invalid mfield (or wrong dataset field): ${field}`);
-			if (typeof value[field] !== "number") throw new Error(`${key} value must be a number`);
-			return;
-		}
-
-		if (key === "IS") {
-			if (typeof value !== "object" || Object.keys(value).length !== 1)
-				throw new Error(`IS must be an object with exactly one key`);
-			const field = Object.keys(value)[0];
-			if (!sfs.includes(field)) throw new Error(`IS targets an invalid sfield (or wrong dataset field): ${field}`);
-
-			const strVal = value[field];
-			if (typeof strVal !== "string") throw new Error(`IS value must be a string`);
-
-			const starCount = (strVal.match(/\*/g) || []).length;
-			if (starCount > 2 || (starCount === 2 && !(strVal.startsWith("*") && strVal.endsWith("*")))) {
-				throw new Error("IS asterisks can only be the first or last character");
-			}
-			if (strVal.length > 2 && strVal.slice(1, -1).includes("*")) {
-				throw new Error("IS asterisks can only be the first or last character");
-			}
-			return;
-		}
-
-		throw new Error(`Unknown filter key: ${key}`);
-	}
-
-	function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
-		// 1. Filter
-		let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
-
-		// 2. Transformations (Grouping & Aggregation)
-		let processed: any[];
-		if (query.TRANSFORMATIONS) {
-			const transformed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
-
-			// Final Projection for Transformations (The "Column Leak" Bug Fix)
-			processed = transformed.map((item) => {
-				const row: any = {};
-				for (const col of query.OPTIONS.COLUMNS) {
-					row[col] = item[col];
-				}
-				return row;
-			});
-		} else {
-			processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
-		}
-
-		// 3. Sorting (Handle V1 string or V2 Sort Object)
-		if (query.OPTIONS.ORDER) {
-			const order = query.OPTIONS.ORDER;
-			const isV2Sort = typeof order === "object" && order !== null;
-			const direction = isV2Sort ? order.dir : "UP";
-			const keys = isV2Sort ? order.keys : [order];
-
-			processed.sort((a, b) => {
-				for (const key of keys) {
-					if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
-					if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
-				}
-				return 0; // Maintain stable sort if all sort keys are equal
-			});
-		}
-
-		return processed;
-	}
-
-	function performTransformations(data: any[], transformations: any, kind: string): any[] {
-		const groups = new Map<string, any[]>();
-		const { GROUP, APPLY } = transformations;
-
-		// Grouping
-		for (const item of data) {
-			const groupValues = GROUP.map((k: string) => {
-				if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
-					return model.getCourseById(item.courseId)?.[k as keyof Course];
-				} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
-					// Fix: Fetch building-level fields for grouping
-					return model.getBuildingById(item.buildingId)?.[k as keyof Building];
-				}
-				return item[k];
-			});
-
-			// Serialize array to JSON string to prevent collision bugs (e.g., "cpsc|john" vs "cpsc", "john|doe")
-			const groupKey = JSON.stringify(groupValues);
-
-			if (!groups.has(groupKey)) groups.set(groupKey, []);
-			groups.get(groupKey)!.push(item);
-		}
-
-		// Aggregation
-		return Array.from(groups.values()).map((groupItems) => {
-			const result: any = {};
-
-			// Set Group Keys
-			GROUP.forEach((k: string) => {
-				if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
-					result[k] = model.getCourseById(groupItems[0].courseId)?.[k as keyof Course];
-				} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
-					// Fix: Fetch building-level fields for group key projection
-					result[k] = model.getBuildingById(groupItems[0].buildingId)?.[k as keyof Building];
-				} else {
-					result[k] = groupItems[0][k];
-				}
-			});
-
-			// Set Apply Keys
-			APPLY.forEach((rule: any) => {
-				const applyKey = Object.keys(rule)[0];
-				const entry = rule[applyKey];
-				const token = Object.keys(entry)[0];
-				const key = entry[token];
-
-				// Fix: Extract values BEFORE passing to calculateAggregation to handle parent-level COUNT lookups
-				const values = groupItems.map((item) => {
-					if (kind === "course_offerings" && sfields.includes(key) && key !== "instructor") {
-						return model.getCourseById(item.courseId)?.[key as keyof Course];
-					} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(key)) {
-						return model.getBuildingById(item.buildingId)?.[key as keyof Building];
-					}
-					return item[key];
-				});
-
-				result[applyKey] = calculateAggregation(values, token);
-			});
-
-			return result;
-		});
-	}
-
-	function calculateAggregation(values: any[], token: string): number {
-		switch (token) {
-			case "MAX":
-				return Math.max(...values);
-			case "MIN":
-				return Math.min(...values);
-			case "COUNT":
-				return new Set(values).size;
-			case "SUM": {
-				let sum = new Decimal(0);
-				for (const val of values) {
-					if (typeof val === "number") {
-						sum = sum.add(new Decimal(val));
-					}
-				}
-				return Number(sum.toNumber().toFixed(2));
-			}
-			case "AVG": {
-				let total = new Decimal(0);
-				let count = 0;
-				for (const val of values) {
-					if (typeof val === "number") {
-						total = total.add(new Decimal(val));
-						count++;
-					}
-				}
-				if (count === 0) return 0;
-				const avg = total.toNumber() / count;
-				return Number(avg.toFixed(2));
-			}
-			default:
-				return 0;
-		}
-	}
-
-	function matchWildcard(text: string, pattern: string): boolean {
-		if (!pattern.includes("*")) return text === pattern;
-
-		if (pattern.startsWith("*") && pattern.endsWith("*")) {
-			return text.includes(pattern.slice(1, -1));
-		}
-
-		if (pattern.startsWith("*")) {
-			return text.endsWith(pattern.slice(1));
-		}
-
-		if (pattern.endsWith("*")) {
-			return text.startsWith(pattern.slice(0, -1));
-		}
-
-		return false;
-	}
-
-	function evaluateFilterV2(filter: any, item: any, kind: string): boolean {
-		if (Object.keys(filter).length === 0) return true;
-
-		const key = Object.keys(filter)[0];
-		const value = filter[key];
-
-		// Recursive Logic
-		if (key === "AND") return value.every((f: any) => evaluateFilterV2(f, item, kind));
-		if (key === "OR") return value.some((f: any) => evaluateFilterV2(f, item, kind));
-		if (key === "NOT") return !evaluateFilterV2(value, item, kind);
-
-		// Comparisons
-		const field = Object.keys(value)[0];
-		let actualValue: any;
-
-		if (kind === "course_offerings") {
-			if (sfields.includes(field) && field !== "instructor") {
-				const course = model.getCourseById(item.courseId);
-				actualValue = course ? (course as any)[field] : "";
-			} else {
-				actualValue = item[field];
-			}
-		} else {
-			// Fix: Look up parent Building for building-level fields
-			if (["name", "address", "lat", "lon"].includes(field)) {
-				const building = model.getBuildingById(item.buildingId);
-				actualValue = building ? (building as any)[field] : undefined;
-			} else {
-				actualValue = item[field];
-			}
-		}
-
-		if (key === "LT") return actualValue < value[field];
-		if (key === "GT") return actualValue > value[field];
-		if (key === "EQ") return actualValue === value[field];
-		if (key === "IS") return matchWildcard(String(actualValue), value[field]);
-
-		return false;
-	}
-
-	function projectRowV2(item: any, columns: string[], kind: string): any {
-		const row: any = {};
-
-		for (const col of columns) {
-			if (kind === "course_offerings") {
-				if (mfields.includes(col) || col === "instructor") {
-					row[col] = item[col];
-				} else {
-					const course = model.getCourseById(item.courseId);
-					row[col] = course ? (course as any)[col] : undefined;
-				}
-			} else {
-				// Fix: Fetch from Building model for parent fields
-				if (["name", "address", "lat", "lon"].includes(col)) {
-					const building = model.getBuildingById(item.buildingId);
-					row[col] = building ? (building as any)[col] : undefined;
-				} else {
-					row[col] = item[col];
-				}
-			}
-		}
-
-		return row;
-	}
+	// app.post("/api/v2/search", async (req, res) => {
+	// 	const { kind, query } = req.body ?? {};
+	// 	// TODO: Make routes thin by moving validation out of route
+	// 	const validationBasic = validateSearchBasic(req.body);
+	// 	if (!validationBasic.valid) {
+	// 		res.status(422).send({
+	// 			error: "Validation failed",
+	// 			fields: validationBasic.fields,
+	// 		});
+	// 		return;
+	// 	}
+	// 	// 2. Validate and Execute Query
+
+	// 	try {
+	// 		const results = await searchService(kind, query);
+	// 		res.status(200).send(results);
+	// 	} catch (err: any) {
+	// 		if (err.message.includes("5000")) {
+	// 			res.status(413).send({
+	// 				error: "Too many results",
+	// 				message: "Query would return more than 5000 results",
+	// 				limit: 5000,
+	// 			});
+	// 		} else {
+	// 			res.status(400).send({ error: "Invalid query", message: err.message });
+	// 		}
+	// 	}
+	// });
+	// function validateSearchBasic(body: any) {
+	// 	const { kind, query } = body ?? {};
+
+	// 	const fields: Record<string, string> = {};
+
+	// 	if (kind === undefined) fields.kind = "required but missing";
+	// 	else if (kind !== "course_offerings" && kind !== "facilities") {
+	// 		fields.kind = "expected to be course_offerings or facilities";
+	// 	}
+
+	// 	if (query === undefined) fields.query = "required but missing";
+	// 	else if (typeof query !== "object" || query === null) {
+	// 		fields.query = "expected an object";
+	// 	}
+
+	// 	if (Object.keys(fields).length > 0) {
+	// 		return { valid: false, fields };
+	// 	}
+
+	// 	return { valid: true, kind, query };
+	// }
+
+	// async function searchService(kind: string, query: any) {
+	// 	const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
+	// 	const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
+
+	// 	validateQueryV2(query, currentMFields, currentSFields);
+
+	// 	const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
+	// 	const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
+
+	// 	if (results.length > 5000) {
+	// 		throw new Error("Query would return more than 5000 results");
+	// 	}
+
+	// 	return results;
+	// }
+
+	// // ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
+	// function validateMComparison(type: string, obj: any) {
+	// 	const keys = Object.keys(obj);
+	// 	if (keys.length !== 1 || !mfields.includes(keys[0]) || typeof obj[keys[0]] !== "number") {
+	// 		throw new Error(`${type} must be an object with one mfield of type number`);
+	// 	}
+	// }
+
+	// function validateQueryV2(query: any, mfs: string[], sfs: string[]) {
+	// 	if (!query.WHERE || typeof query.WHERE !== "object") throw new Error("Missing WHERE");
+	// 	if (!query.OPTIONS || typeof query.OPTIONS !== "object") throw new Error("Missing OPTIONS");
+	// 	if (!query.OPTIONS.COLUMNS || !Array.isArray(query.OPTIONS.COLUMNS) || query.OPTIONS.COLUMNS.length === 0) {
+	// 		throw new Error("Missing COLUMNS or empty array");
+	// 	}
+
+	// 	const allValidKeys = [...mfs, ...sfs];
+
+	// 	// 1. Validate WHERE Deeply (Ensures no mixing of dataset fields and correct types)
+	// 	validateFilterV2(query.WHERE, mfs, sfs);
+
+	// 	// 2. Validate Transformations
+	// 	if (query.TRANSFORMATIONS) {
+	// 		if (
+	// 			!query.TRANSFORMATIONS.GROUP ||
+	// 			!Array.isArray(query.TRANSFORMATIONS.GROUP) ||
+	// 			query.TRANSFORMATIONS.GROUP.length === 0
+	// 		) {
+	// 			throw new Error("Missing GROUP in TRANSFORMATIONS");
+	// 		}
+	// 		if (!query.TRANSFORMATIONS.APPLY || !Array.isArray(query.TRANSFORMATIONS.APPLY)) {
+	// 			throw new Error("Missing APPLY in TRANSFORMATIONS");
+	// 		}
+
+	// 		const groupKeys = query.TRANSFORMATIONS.GROUP;
+	// 		const applyKeys = new Set<string>();
+
+	// 		// Validate GROUP keys
+	// 		for (const key of groupKeys) {
+	// 			if (!allValidKeys.includes(key)) throw new Error(`Invalid GROUP key: ${key}`);
+	// 		}
+
+	// 		// Validate APPLY rules
+	// 		for (const rule of query.TRANSFORMATIONS.APPLY) {
+	// 			if (typeof rule !== "object" || Object.keys(rule).length !== 1) throw new Error("Invalid APPLY rule format");
+
+	// 			const applyKey = Object.keys(rule)[0];
+
+	// 			// Apply keys cannot have underscores and must be unique
+	// 			if (applyKey.includes("_")) throw new Error("applykey cannot contain underscores");
+	// 			if (applyKeys.has(applyKey)) throw new Error(`Duplicate applykey found: ${applyKey}`);
+	// 			applyKeys.add(applyKey);
+
+	// 			const tokenObj = rule[applyKey];
+	// 			if (typeof tokenObj !== "object" || Object.keys(tokenObj).length !== 1)
+	// 				throw new Error("Invalid APPLY token object");
+
+	// 			const token = Object.keys(tokenObj)[0];
+	// 			const targetKey = tokenObj[token];
+
+	// 			if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token)) throw new Error(`Invalid APPLY token: ${token}`);
+	// 			if (!allValidKeys.includes(targetKey)) throw new Error(`Invalid target key in APPLY: ${targetKey}`);
+
+	// 			// MAX, MIN, AVG, SUM can ONLY target mfields (numbers)
+	// 			if (["MAX", "MIN", "AVG", "SUM"].includes(token)) {
+	// 				if (!mfs.includes(targetKey)) throw new Error(`${token} must target a numeric field (mfield)`);
+	// 			}
+	// 		}
+
+	// 		// All columns must be in GROUP or APPLY
+	// 		for (const col of query.OPTIONS.COLUMNS) {
+	// 			if (!groupKeys.includes(col) && !applyKeys.has(col)) {
+	// 				throw new Error("When TRANSFORMATIONS is present, all COLUMNS must be in GROUP or APPLY");
+	// 			}
+	// 		}
+	// 	} else {
+	// 		// No Transformations: Columns must be raw fields
+	// 		for (const col of query.OPTIONS.COLUMNS) {
+	// 			if (!allValidKeys.includes(col)) throw new Error(`Unknown key in COLUMNS: ${col}`);
+	// 		}
+	// 	}
+
+	// 	// 3. Validate Order
+	// 	if (query.OPTIONS.ORDER !== undefined) {
+	// 		const order = query.OPTIONS.ORDER;
+
+	// 		if (typeof order === "string") {
+	// 			// Single key sort
+	// 			if (!query.OPTIONS.COLUMNS.includes(order)) throw new Error("ORDER key must be in COLUMNS");
+	// 		} else if (typeof order === "object" && order !== null) {
+	// 			// Multi-key sort
+	// 			if (!order.dir || !["UP", "DOWN"].includes(order.dir)) throw new Error("Invalid ORDER direction");
+	// 			if (!order.keys || !Array.isArray(order.keys) || order.keys.length === 0)
+	// 				throw new Error("Invalid ORDER keys array");
+
+	// 			for (const key of order.keys) {
+	// 				if (!query.OPTIONS.COLUMNS.includes(key)) throw new Error(`ORDER key '${key}' must be in COLUMNS`);
+	// 			}
+	// 		} else {
+	// 			throw new Error("ORDER must be a string or an object with 'dir' and 'keys'");
+	// 		}
+	// 	}
+	// }
+
+	// function validateFilterV2(filter: any, mfs: string[], sfs: string[]) {
+	// 	if (Object.keys(filter).length === 0) return; // Empty WHERE {} is valid
+	// 	if (Object.keys(filter).length > 1) throw new Error("WHERE/Logic blocks must contain exactly one key");
+
+	// 	const key = Object.keys(filter)[0];
+	// 	const value = filter[key];
+
+	// 	if (key === "AND" || key === "OR") {
+	// 		if (!Array.isArray(value) || value.length === 0) throw new Error(`${key} must be a non-empty array`);
+	// 		value.forEach((f) => validateFilterV2(f, mfs, sfs));
+	// 		return;
+	// 	}
+
+	// 	if (key === "NOT") {
+	// 		if (typeof value !== "object" || Object.keys(value).length === 0)
+	// 			throw new Error("NOT must be a non-empty object");
+	// 		validateFilterV2(value, mfs, sfs);
+	// 		return;
+	// 	}
+
+	// 	if (["LT", "GT", "EQ"].includes(key)) {
+	// 		if (typeof value !== "object" || Object.keys(value).length !== 1)
+	// 			throw new Error(`${key} must be an object with exactly one key`);
+	// 		const field = Object.keys(value)[0];
+	// 		if (!mfs.includes(field)) throw new Error(`${key} targets an invalid mfield (or wrong dataset field): ${field}`);
+	// 		if (typeof value[field] !== "number") throw new Error(`${key} value must be a number`);
+	// 		return;
+	// 	}
+
+	// 	if (key === "IS") {
+	// 		if (typeof value !== "object" || Object.keys(value).length !== 1)
+	// 			throw new Error(`IS must be an object with exactly one key`);
+	// 		const field = Object.keys(value)[0];
+	// 		if (!sfs.includes(field)) throw new Error(`IS targets an invalid sfield (or wrong dataset field): ${field}`);
+
+	// 		const strVal = value[field];
+	// 		if (typeof strVal !== "string") throw new Error(`IS value must be a string`);
+
+	// 		const starCount = (strVal.match(/\*/g) || []).length;
+	// 		if (starCount > 2 || (starCount === 2 && !(strVal.startsWith("*") && strVal.endsWith("*")))) {
+	// 			throw new Error("IS asterisks can only be the first or last character");
+	// 		}
+	// 		if (strVal.length > 2 && strVal.slice(1, -1).includes("*")) {
+	// 			throw new Error("IS asterisks can only be the first or last character");
+	// 		}
+	// 		return;
+	// 	}
+
+	// 	throw new Error(`Unknown filter key: ${key}`);
+	// }
+
+	// function executeQueryV2(query: any, data: any[], kind: string, mfs: string[], sfs: string[]) {
+	// 	// 1. Filter
+	// 	let filtered = data.filter((item) => evaluateFilterV2(query.WHERE, item, kind));
+
+	// 	// 2. Transformations (Grouping & Aggregation)
+	// 	let processed: any[];
+	// 	if (query.TRANSFORMATIONS) {
+	// 		const transformed = performTransformations(filtered, query.TRANSFORMATIONS, kind);
+
+	// 		// Final Projection for Transformations (The "Column Leak" Bug Fix)
+	// 		processed = transformed.map((item) => {
+	// 			const row: any = {};
+	// 			for (const col of query.OPTIONS.COLUMNS) {
+	// 				row[col] = item[col];
+	// 			}
+	// 			return row;
+	// 		});
+	// 	} else {
+	// 		processed = filtered.map((item) => projectRowV2(item, query.OPTIONS.COLUMNS, kind));
+	// 	}
+
+	// 	// 3. Sorting (Handle V1 string or V2 Sort Object)
+	// 	if (query.OPTIONS.ORDER) {
+	// 		const order = query.OPTIONS.ORDER;
+	// 		const isV2Sort = typeof order === "object" && order !== null;
+	// 		const direction = isV2Sort ? order.dir : "UP";
+	// 		const keys = isV2Sort ? order.keys : [order];
+
+	// 		processed.sort((a, b) => {
+	// 			for (const key of keys) {
+	// 				if (a[key] < b[key]) return direction === "UP" ? -1 : 1;
+	// 				if (a[key] > b[key]) return direction === "UP" ? 1 : -1;
+	// 			}
+	// 			return 0; // Maintain stable sort if all sort keys are equal
+	// 		});
+	// 	}
+
+	// 	return processed;
+	// }
+
+	// function performTransformations(data: any[], transformations: any, kind: string): any[] {
+	// 	const groups = new Map<string, any[]>();
+	// 	const { GROUP, APPLY } = transformations;
+
+	// 	// Grouping
+	// 	for (const item of data) {
+	// 		const groupValues = GROUP.map((k: string) => {
+	// 			if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
+	// 				return model.getCourseById(item.courseId)?.[k as keyof Course];
+	// 			} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
+	// 				// Fix: Fetch building-level fields for grouping
+	// 				return model.getBuildingById(item.buildingId)?.[k as keyof Building];
+	// 			}
+	// 			return item[k];
+	// 		});
+
+	// 		// Serialize array to JSON string to prevent collision bugs (e.g., "cpsc|john" vs "cpsc", "john|doe")
+	// 		const groupKey = JSON.stringify(groupValues);
+
+	// 		if (!groups.has(groupKey)) groups.set(groupKey, []);
+	// 		groups.get(groupKey)!.push(item);
+	// 	}
+
+	// 	// Aggregation
+	// 	return Array.from(groups.values()).map((groupItems) => {
+	// 		const result: any = {};
+
+	// 		// Set Group Keys
+	// 		GROUP.forEach((k: string) => {
+	// 			if (kind === "course_offerings" && sfields.includes(k) && k !== "instructor") {
+	// 				result[k] = model.getCourseById(groupItems[0].courseId)?.[k as keyof Course];
+	// 			} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(k)) {
+	// 				// Fix: Fetch building-level fields for group key projection
+	// 				result[k] = model.getBuildingById(groupItems[0].buildingId)?.[k as keyof Building];
+	// 			} else {
+	// 				result[k] = groupItems[0][k];
+	// 			}
+	// 		});
+
+	// 		// Set Apply Keys
+	// 		APPLY.forEach((rule: any) => {
+	// 			const applyKey = Object.keys(rule)[0];
+	// 			const entry = rule[applyKey];
+	// 			const token = Object.keys(entry)[0];
+	// 			const key = entry[token];
+
+	// 			// Fix: Extract values BEFORE passing to calculateAggregation to handle parent-level COUNT lookups
+	// 			const values = groupItems.map((item) => {
+	// 				if (kind === "course_offerings" && sfields.includes(key) && key !== "instructor") {
+	// 					return model.getCourseById(item.courseId)?.[key as keyof Course];
+	// 				} else if (kind === "facilities" && ["name", "address", "lat", "lon"].includes(key)) {
+	// 					return model.getBuildingById(item.buildingId)?.[key as keyof Building];
+	// 				}
+	// 				return item[key];
+	// 			});
+
+	// 			result[applyKey] = calculateAggregation(values, token);
+	// 		});
+
+	// 		return result;
+	// 	});
+	// }
+
+	// function calculateAggregation(values: any[], token: string): number {
+	// 	switch (token) {
+	// 		case "MAX":
+	// 			return Math.max(...values);
+	// 		case "MIN":
+	// 			return Math.min(...values);
+	// 		case "COUNT":
+	// 			return new Set(values).size;
+	// 		case "SUM": {
+	// 			let sum = new Decimal(0);
+	// 			for (const val of values) {
+	// 				if (typeof val === "number") {
+	// 					sum = sum.add(new Decimal(val));
+	// 				}
+	// 			}
+	// 			return Number(sum.toNumber().toFixed(2));
+	// 		}
+	// 		case "AVG": {
+	// 			let total = new Decimal(0);
+	// 			let count = 0;
+	// 			for (const val of values) {
+	// 				if (typeof val === "number") {
+	// 					total = total.add(new Decimal(val));
+	// 					count++;
+	// 				}
+	// 			}
+	// 			if (count === 0) return 0;
+	// 			const avg = total.toNumber() / count;
+	// 			return Number(avg.toFixed(2));
+	// 		}
+	// 		default:
+	// 			return 0;
+	// 	}
+	// }
+
+	// function matchWildcard(text: string, pattern: string): boolean {
+	// 	if (!pattern.includes("*")) return text === pattern;
+
+	// 	if (pattern.startsWith("*") && pattern.endsWith("*")) {
+	// 		return text.includes(pattern.slice(1, -1));
+	// 	}
+
+	// 	if (pattern.startsWith("*")) {
+	// 		return text.endsWith(pattern.slice(1));
+	// 	}
+
+	// 	if (pattern.endsWith("*")) {
+	// 		return text.startsWith(pattern.slice(0, -1));
+	// 	}
+
+	// 	return false;
+	// }
+
+	// function evaluateFilterV2(filter: any, item: any, kind: string): boolean {
+	// 	if (Object.keys(filter).length === 0) return true;
+
+	// 	const key = Object.keys(filter)[0];
+	// 	const value = filter[key];
+
+	// 	// Recursive Logic
+	// 	if (key === "AND") return value.every((f: any) => evaluateFilterV2(f, item, kind));
+	// 	if (key === "OR") return value.some((f: any) => evaluateFilterV2(f, item, kind));
+	// 	if (key === "NOT") return !evaluateFilterV2(value, item, kind);
+
+	// 	// Comparisons
+	// 	const field = Object.keys(value)[0];
+	// 	let actualValue: any;
+
+	// 	if (kind === "course_offerings") {
+	// 		if (sfields.includes(field) && field !== "instructor") {
+	// 			const course = model.getCourseById(item.courseId);
+	// 			actualValue = course ? (course as any)[field] : "";
+	// 		} else {
+	// 			actualValue = item[field];
+	// 		}
+	// 	} else {
+	// 		// Fix: Look up parent Building for building-level fields
+	// 		if (["name", "address", "lat", "lon"].includes(field)) {
+	// 			const building = model.getBuildingById(item.buildingId);
+	// 			actualValue = building ? (building as any)[field] : undefined;
+	// 		} else {
+	// 			actualValue = item[field];
+	// 		}
+	// 	}
+
+	// 	if (key === "LT") return actualValue < value[field];
+	// 	if (key === "GT") return actualValue > value[field];
+	// 	if (key === "EQ") return actualValue === value[field];
+	// 	if (key === "IS") return matchWildcard(String(actualValue), value[field]);
+
+	// 	return false;
+	// }
+
+	// function projectRowV2(item: any, columns: string[], kind: string): any {
+	// 	const row: any = {};
+
+	// 	for (const col of columns) {
+	// 		if (kind === "course_offerings") {
+	// 			if (mfields.includes(col) || col === "instructor") {
+	// 				row[col] = item[col];
+	// 			} else {
+	// 				const course = model.getCourseById(item.courseId);
+	// 				row[col] = course ? (course as any)[col] : undefined;
+	// 			}
+	// 		} else {
+	// 			// Fix: Fetch from Building model for parent fields
+	// 			if (["name", "address", "lat", "lon"].includes(col)) {
+	// 				const building = model.getBuildingById(item.buildingId);
+	// 				row[col] = building ? (building as any)[col] : undefined;
+	// 			} else {
+	// 				row[col] = item[col];
+	// 			}
+	// 		}
+	// 	}
+
+	// 	return row;
+	// }
 
 	///// END OF V2 SEARCH GRADED AREA /////
 
@@ -2261,343 +2263,343 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	return app;
 }
 
-type Data = {
-	courses: Course[];
-	sections: Section[];
-	buildings: Building[];
-	rooms: Room[];
-};
+// type Data = {
+// 	courses: Course[];
+// 	sections: Section[];
+// 	buildings: Building[];
+// 	rooms: Room[];
+// };
 
-class Model {
-	private filepath: string; // start of genai (6 lines)
-	private courseMap: Map<string, Course> = new Map();
-	private sectionMap: Map<string, Section> = new Map();
-	private buildingMap: Map<string, Building> = new Map();
-	private roomMap: Map<string, Room> = new Map();
-	private constructor(filepath: string, data: Data) {
-		this.filepath = filepath;
-		for (const course of data.courses) this.courseMap.set(course.id, course);
-		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
-		for (const building of data.buildings) this.buildingMap.set(building.id, building);
-		for (const room of data.rooms) this.roomMap.set(`${room.buildingId}:${room.id}`, room);
-	} // end of genai
+// class Model {
+// 	private filepath: string; // start of genai (6 lines)
+// 	private courseMap: Map<string, Course> = new Map();
+// 	private sectionMap: Map<string, Section> = new Map();
+// 	private buildingMap: Map<string, Building> = new Map();
+// 	private roomMap: Map<string, Room> = new Map();
+// 	private constructor(filepath: string, data: Data) {
+// 		this.filepath = filepath;
+// 		for (const course of data.courses) this.courseMap.set(course.id, course);
+// 		for (const section of data.sections) this.sectionMap.set(`${section.courseId}:${section.id}`, section);
+// 		for (const building of data.buildings) this.buildingMap.set(building.id, building);
+// 		for (const room of data.rooms) this.roomMap.set(`${room.buildingId}:${room.id}`, room);
+// 	} // end of genai
 
-	// --- LOAD AND SAVE ---
+// 	// --- LOAD AND SAVE ---
 
-	static async readModel(datadir: string): Promise<Model> {
-		const filepath = path.join(datadir, "model.json");
+// 	static async readModel(datadir: string): Promise<Model> {
+// 		const filepath = path.join(datadir, "model.json");
 
-		try {
-			const raw = await fs.readFile(filepath, "utf-8");
-			const parsed = JSON.parse(raw) as Data; // ai generated (6 lines)
-			const data: Data = {
-				courses: Array.isArray(parsed.courses) ? parsed.courses : [],
-				sections: Array.isArray(parsed.sections) ? parsed.sections : [],
-				buildings: Array.isArray(parsed.buildings) ? parsed.buildings : [],
-				rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
-			}; // end of ai generated
-			return new Model(filepath, data);
-		} catch {
-			return new Model(filepath, { courses: [], sections: [], buildings: [], rooms: [] }); // file does not exist, create blank file?
-		}
-	}
+// 		try {
+// 			const raw = await fs.readFile(filepath, "utf-8");
+// 			const parsed = JSON.parse(raw) as Data; // ai generated (6 lines)
+// 			const data: Data = {
+// 				courses: Array.isArray(parsed.courses) ? parsed.courses : [],
+// 				sections: Array.isArray(parsed.sections) ? parsed.sections : [],
+// 				buildings: Array.isArray(parsed.buildings) ? parsed.buildings : [],
+// 				rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
+// 			}; // end of ai generated
+// 			return new Model(filepath, data);
+// 		} catch {
+// 			return new Model(filepath, { courses: [], sections: [], buildings: [], rooms: [] }); // file does not exist, create blank file?
+// 		}
+// 	}
 
-	async writeModel(): Promise<void> {
-		// use of genai in this function
-		try {
-			const dir = path.dirname(this.filepath);
-			await fs.mkdir(dir, { recursive: true });
-			const data = {
-				courses: Array.from(this.courseMap.values()),
-				sections: Array.from(this.sectionMap.values()),
-				buildings: Array.from(this.buildingMap.values()),
-				rooms: Array.from(this.roomMap.values()),
-			};
-			await fs.writeFile(this.filepath, JSON.stringify(data, null, 2), "utf-8");
-		} catch {
-			// ignore, only fails in testing when datadir is deleted
-		}
-	}
+// 	async writeModel(): Promise<void> {
+// 		// use of genai in this function
+// 		try {
+// 			const dir = path.dirname(this.filepath);
+// 			await fs.mkdir(dir, { recursive: true });
+// 			const data = {
+// 				courses: Array.from(this.courseMap.values()),
+// 				sections: Array.from(this.sectionMap.values()),
+// 				buildings: Array.from(this.buildingMap.values()),
+// 				rooms: Array.from(this.roomMap.values()),
+// 			};
+// 			await fs.writeFile(this.filepath, JSON.stringify(data, null, 2), "utf-8");
+// 		} catch {
+// 			// ignore, only fails in testing when datadir is deleted
+// 		}
+// 	}
 
-	// --- COURSE METHODS ---
+// 	// --- COURSE METHODS ---
 
-	public getCourses(): Course[] {
-		return Array.from(this.courseMap.values());
-	}
+// 	public getCourses(): Course[] {
+// 		return Array.from(this.courseMap.values());
+// 	}
 
-	public getCourseById(id: string): Course | undefined {
-		return this.courseMap.get(id);
-	}
+// 	public getCourseById(id: string): Course | undefined {
+// 		return this.courseMap.get(id);
+// 	}
 
-	public setCourse(id: string, title: string, dept: string, code: string): Course {
-		let course = this.getCourseById(id);
-		if (course) {
-			course.title = title;
-			course.dept = dept;
-			course.code = code;
-		} else {
-			course = { id, title, dept, code, sectionIds: [], latestYear: -Infinity };
-			this.courseMap.set(id, course);
-		}
+// 	public setCourse(id: string, title: string, dept: string, code: string): Course {
+// 		let course = this.getCourseById(id);
+// 		if (course) {
+// 			course.title = title;
+// 			course.dept = dept;
+// 			course.code = code;
+// 		} else {
+// 			course = { id, title, dept, code, sectionIds: [], latestYear: -Infinity };
+// 			this.courseMap.set(id, course);
+// 		}
 
-		return course;
-	}
+// 		return course;
+// 	}
 
-	public async delCourse(id: string): Promise<void> {
-		if (!this.courseMap.has(id)) {
-			return;
-		}
+// 	public async delCourse(id: string): Promise<void> {
+// 		if (!this.courseMap.has(id)) {
+// 			return;
+// 		}
 
-		// delete associated sections
-		const course = this.getCourseById(id);
-		const sectionIds = course?.sectionIds; // course cannot be undefined
-		if (sectionIds) {
-			for (const sectionId of [...sectionIds]) {
-				await this.delSection(sectionId, course.id);
-			}
-		}
+// 		// delete associated sections
+// 		const course = this.getCourseById(id);
+// 		const sectionIds = course?.sectionIds; // course cannot be undefined
+// 		if (sectionIds) {
+// 			for (const sectionId of [...sectionIds]) {
+// 				await this.delSection(sectionId, course.id);
+// 			}
+// 		}
 
-		this.courseMap.delete(id);
+// 		this.courseMap.delete(id);
 
-		await this.writeModel();
-		return;
-	}
+// 		await this.writeModel();
+// 		return;
+// 	}
 
-	// --- SECTION METHODS ---
+// 	// --- SECTION METHODS ---
 
-	public getSections(): Section[] {
-		return Array.from(this.sectionMap.values());
-	}
+// 	public getSections(): Section[] {
+// 		return Array.from(this.sectionMap.values());
+// 	}
 
-	public getSectionById(id: string, courseId: string): Section | undefined {
-		return this.sectionMap.get(`${courseId}:${id}`);
-	}
+// 	public getSectionById(id: string, courseId: string): Section | undefined {
+// 		return this.sectionMap.get(`${courseId}:${id}`);
+// 	}
 
-	public setSection(
-		courseId: string,
-		id: string,
-		instructor: string,
-		year: number,
-		avg: number,
-		pass: number,
-		fail: number,
-		audit: number
-	): Section {
-		let section = this.getSectionById(id, courseId);
-		if (section) {
-			// overwrite
-			section.instructor = instructor;
-			section.year = year;
-			section.avg = avg;
-			section.pass = pass;
-			section.fail = fail;
-			section.audit = audit;
-			section.courseId = courseId;
-		} else {
-			section = { id, instructor, year, avg, pass, fail, audit, courseId };
-			this.sectionMap.set(`${courseId}:${id}`, section);
+// 	public setSection(
+// 		courseId: string,
+// 		id: string,
+// 		instructor: string,
+// 		year: number,
+// 		avg: number,
+// 		pass: number,
+// 		fail: number,
+// 		audit: number
+// 	): Section {
+// 		let section = this.getSectionById(id, courseId);
+// 		if (section) {
+// 			// overwrite
+// 			section.instructor = instructor;
+// 			section.year = year;
+// 			section.avg = avg;
+// 			section.pass = pass;
+// 			section.fail = fail;
+// 			section.audit = audit;
+// 			section.courseId = courseId;
+// 		} else {
+// 			section = { id, instructor, year, avg, pass, fail, audit, courseId };
+// 			this.sectionMap.set(`${courseId}:${id}`, section);
 
-			const course = this.getCourseById(courseId);
-			if (course && !course.sectionIds.includes(id)) {
-				course.sectionIds.push(id);
-			}
-		}
+// 			const course = this.getCourseById(courseId);
+// 			if (course && !course.sectionIds.includes(id)) {
+// 				course.sectionIds.push(id);
+// 			}
+// 		}
 
-		return section;
-	}
+// 		return section;
+// 	}
 
-	public async delSection(id: string, courseID: string): Promise<void> {
-		const key = `${courseID}:${id}`;
-		if (!this.sectionMap.has(key)) {
-			return;
-		}
-		this.sectionMap.delete(key);
+// 	public async delSection(id: string, courseID: string): Promise<void> {
+// 		const key = `${courseID}:${id}`;
+// 		if (!this.sectionMap.has(key)) {
+// 			return;
+// 		}
+// 		this.sectionMap.delete(key);
 
-		// delete from parent
-		const course = this.getCourseById(courseID);
-		if (course && course.sectionIds.includes(id)) {
-			const parentIndex = course.sectionIds.findIndex((sectionId) => sectionId === id);
-			if (parentIndex !== -1) {
-				course.sectionIds.splice(parentIndex, 1);
-			}
-		}
+// 		// delete from parent
+// 		const course = this.getCourseById(courseID);
+// 		if (course && course.sectionIds.includes(id)) {
+// 			const parentIndex = course.sectionIds.findIndex((sectionId) => sectionId === id);
+// 			if (parentIndex !== -1) {
+// 				course.sectionIds.splice(parentIndex, 1);
+// 			}
+// 		}
 
-		await this.writeModel();
-		return;
-	}
-	// --- Building METHODS ---
+// 		await this.writeModel();
+// 		return;
+// 	}
+// 	// --- Building METHODS ---
 
-	public getBuildings(): Building[] {
-		return Array.from(this.buildingMap.values());
-	}
+// 	public getBuildings(): Building[] {
+// 		return Array.from(this.buildingMap.values());
+// 	}
 
-	public getBuildingById(id: string): Building | undefined {
-		return this.buildingMap.get(id);
-	}
+// 	public getBuildingById(id: string): Building | undefined {
+// 		return this.buildingMap.get(id);
+// 	}
 
-	public setBuilding(id: string, name: string, address: string, lat: number, lon: number): Building {
-		let building = this.getBuildingById(id);
-		if (building) {
-			building.name = name;
-			building.address = address;
-			building.lat = lat;
-			building.lon = lon;
-		} else {
-			building = { id, name, address, lat, lon, roomIds: [] };
-			this.buildingMap.set(id, building);
-		}
+// 	public setBuilding(id: string, name: string, address: string, lat: number, lon: number): Building {
+// 		let building = this.getBuildingById(id);
+// 		if (building) {
+// 			building.name = name;
+// 			building.address = address;
+// 			building.lat = lat;
+// 			building.lon = lon;
+// 		} else {
+// 			building = { id, name, address, lat, lon, roomIds: [] };
+// 			this.buildingMap.set(id, building);
+// 		}
 
-		return building;
-	}
+// 		return building;
+// 	}
 
-	public async delBuilding(id: string): Promise<void> {
-		if (!this.buildingMap.has(id)) {
-			return;
-		}
+// 	public async delBuilding(id: string): Promise<void> {
+// 		if (!this.buildingMap.has(id)) {
+// 			return;
+// 		}
 
-		// delete associated rooms
-		const building = this.getBuildingById(id);
-		const roomIds = building?.roomIds; // course cannot be undefined
-		if (roomIds) {
-			for (const roomId of [...roomIds]) {
-				await this.delRoom(roomId, building.id);
-			}
-		}
+// 		// delete associated rooms
+// 		const building = this.getBuildingById(id);
+// 		const roomIds = building?.roomIds; // course cannot be undefined
+// 		if (roomIds) {
+// 			for (const roomId of [...roomIds]) {
+// 				await this.delRoom(roomId, building.id);
+// 			}
+// 		}
 
-		this.buildingMap.delete(id);
+// 		this.buildingMap.delete(id);
 
-		await this.writeModel();
-		return;
-	}
+// 		await this.writeModel();
+// 		return;
+// 	}
 
-	// --- Room METHODS ---
+// 	// --- Room METHODS ---
 
-	public getRooms(): Room[] {
-		return Array.from(this.roomMap.values());
-	}
+// 	public getRooms(): Room[] {
+// 		return Array.from(this.roomMap.values());
+// 	}
 
-	public getRoomById(id: string, buildingId: string): Room | undefined {
-		return this.roomMap.get(`${buildingId}:${id}`);
-	}
+// 	public getRoomById(id: string, buildingId: string): Room | undefined {
+// 		return this.roomMap.get(`${buildingId}:${id}`);
+// 	}
 
-	public setRoom(
-		id: string,
-		buildingId: string,
-		buildingName: string,
-		number: string,
-		type: string,
-		furniture: string,
-		href: string,
-		seats: number
-	): Room {
-		let room = this.getRoomById(id, buildingId);
-		if (room) {
-			// overwrite
-			room.building = buildingName;
-			room.number = number;
-			room.type = type;
-			room.furniture = furniture;
-			room.href = href;
-			room.seats = seats;
-		} else {
-			room = { id, buildingId, building: buildingName, number, type, furniture, href, seats };
-			this.roomMap.set(`${buildingId}:${id}`, room);
+// 	public setRoom(
+// 		id: string,
+// 		buildingId: string,
+// 		buildingName: string,
+// 		number: string,
+// 		type: string,
+// 		furniture: string,
+// 		href: string,
+// 		seats: number
+// 	): Room {
+// 		let room = this.getRoomById(id, buildingId);
+// 		if (room) {
+// 			// overwrite
+// 			room.building = buildingName;
+// 			room.number = number;
+// 			room.type = type;
+// 			room.furniture = furniture;
+// 			room.href = href;
+// 			room.seats = seats;
+// 		} else {
+// 			room = { id, buildingId, building: buildingName, number, type, furniture, href, seats };
+// 			this.roomMap.set(`${buildingId}:${id}`, room);
 
-			const building = this.getBuildingById(buildingId);
-			if (building && !building.roomIds.includes(id)) {
-				building.roomIds.push(id);
-			}
-		}
+// 			const building = this.getBuildingById(buildingId);
+// 			if (building && !building.roomIds.includes(id)) {
+// 				building.roomIds.push(id);
+// 			}
+// 		}
 
-		return room;
-	}
+// 		return room;
+// 	}
 
-	public async delRoom(id: string, buildingId: string): Promise<void> {
-		const key = `${buildingId}:${id}`;
-		if (!this.roomMap.has(key)) {
-			return;
-		}
-		this.roomMap.delete(key);
+// 	public async delRoom(id: string, buildingId: string): Promise<void> {
+// 		const key = `${buildingId}:${id}`;
+// 		if (!this.roomMap.has(key)) {
+// 			return;
+// 		}
+// 		this.roomMap.delete(key);
 
-		// delete from parent
-		const building = this.getBuildingById(buildingId);
-		if (building && building.roomIds.includes(id)) {
-			const parentIndex = building.roomIds.findIndex((roomId) => roomId === id);
-			if (parentIndex !== -1) {
-				building.roomIds.splice(parentIndex, 1);
-			}
-		}
+// 		// delete from parent
+// 		const building = this.getBuildingById(buildingId);
+// 		if (building && building.roomIds.includes(id)) {
+// 			const parentIndex = building.roomIds.findIndex((roomId) => roomId === id);
+// 			if (parentIndex !== -1) {
+// 				building.roomIds.splice(parentIndex, 1);
+// 			}
+// 		}
 
-		await this.writeModel();
-		return;
-	}
-}
+// 		await this.writeModel();
+// 		return;
+// 	}
+// }
 
-export interface Course {
-	id: string;
-	title: string;
-	dept: string;
-	code: string;
-	sectionIds: string[];
-	latestYear: number;
-}
+// export interface Course {
+// 	id: string;
+// 	title: string;
+// 	dept: string;
+// 	code: string;
+// 	sectionIds: string[];
+// 	latestYear: number;
+// }
 
-export interface Section {
-	id: string;
-	instructor: string;
-	year: number;
-	avg: number;
-	pass: number;
-	fail: number;
-	audit: number;
-	courseId: string;
-}
-export interface Building {
-	id: string;
-	name: string;
-	address: string;
-	lat: number;
-	lon: number;
-	roomIds: string[];
-}
-export interface Room {
-	id: string;
-	buildingId: string;
-	building: string;
-	number: string;
-	type: string;
-	furniture: string;
-	href: string;
-	seats: number;
-}
+// export interface Section {
+// 	id: string;
+// 	instructor: string;
+// 	year: number;
+// 	avg: number;
+// 	pass: number;
+// 	fail: number;
+// 	audit: number;
+// 	courseId: string;
+// }
+// export interface Building {
+// 	id: string;
+// 	name: string;
+// 	address: string;
+// 	lat: number;
+// 	lon: number;
+// 	roomIds: string[];
+// }
+// export interface Room {
+// 	id: string;
+// 	buildingId: string;
+// 	building: string;
+// 	number: string;
+// 	type: string;
+// 	furniture: string;
+// 	href: string;
+// 	seats: number;
+// }
 
-export interface DatasetC {
-	id: string;
-	status: "processing" | "completed" | "failed";
-	kind: string;
-	stats: {
-		files_total: number;
-		files_processed: number;
-		files_skipped: number;
-		courses_seen: number;
-		courses_added: number;
-		courses_modified: number;
-		sections_seen: number;
-		sections_added: number;
-		sections_modified: number;
-	};
-	message: string;
-}
+// export interface DatasetC {
+// 	id: string;
+// 	status: "processing" | "completed" | "failed";
+// 	kind: string;
+// 	stats: {
+// 		files_total: number;
+// 		files_processed: number;
+// 		files_skipped: number;
+// 		courses_seen: number;
+// 		courses_added: number;
+// 		courses_modified: number;
+// 		sections_seen: number;
+// 		sections_added: number;
+// 		sections_modified: number;
+// 	};
+// 	message: string;
+// }
 
-export interface DatasetF {
-	id: string;
-	status: "processing" | "completed" | "failed";
-	kind: string;
-	stats: {
-		buildings_added: number;
-		buildings_modified: number;
-		rooms_added: number;
-		rooms_modified: number;
-	};
-	message: string;
-}
+// export interface DatasetF {
+// 	id: string;
+// 	status: "processing" | "completed" | "failed";
+// 	kind: string;
+// 	stats: {
+// 		buildings_added: number;
+// 		buildings_modified: number;
+// 		rooms_added: number;
+// 		rooms_modified: number;
+// 	};
+// 	message: string;
+// }
