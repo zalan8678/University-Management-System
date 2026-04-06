@@ -8,6 +8,16 @@ export class ValidationError extends Error {
 		this.name = "ValidationError";
 	}
 }
+
+export class GrammarError extends Error {
+	constructor(
+		public message: string,
+		public fields?: Record<string, string>
+	) {
+		super(message);
+		this.name = "GrammarError";
+	}
+}
 export class TooManyResultsError extends Error {
 	constructor(message: string) {
 		super(message);

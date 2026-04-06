@@ -1,10 +1,18 @@
 import fs from "fs/promises";
 import express from "express";
 import cors from "cors";
+
 // import path from "path";
 // import Decimal from "decimal.js";
 import searchRoutes from "./routes/searchRoutes";
 import Model, { initModel, getModel, Course, Section, Building, Room, DatasetC, DatasetF } from "./models/Model";
+
+import path from "path";
+import Decimal from "decimal.js";
+import { GrammarError, TooManyResultsError, ValidationError } from "./middleware/errors";
+import { handleError } from "./middleware/handleErrors";
+// import searchRoutes from "./routes/searchRoutes";
+
 
 /**
  * Express application.
@@ -1197,6 +1205,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	///// START OF C3 GRADED AREA - V2 SEARCH /////
 
+
 	// app.post("/api/v2/search", async (req, res) => {
 	// 	const { kind, query } = req.body ?? {};
 	// 	// TODO: Make routes thin by moving validation out of route
@@ -1235,14 +1244,17 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 		fields.kind = "expected to be course_offerings or facilities";
 	// 	}
 
+
 	// 	if (query === undefined) fields.query = "required but missing";
 	// 	else if (typeof query !== "object" || query === null) {
 	// 		fields.query = "expected an object";
 	// 	}
 
+
 	// 	if (Object.keys(fields).length > 0) {
 	// 		return { valid: false, fields };
 	// 	}
+
 
 	// 	return { valid: true, kind, query };
 	// }
@@ -1251,17 +1263,21 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 	const currentMFields = kind === "course_offerings" ? mfields : mfieldsFacility;
 	// 	const currentSFields = kind === "course_offerings" ? sfields : sfieldsFacility;
 
+
 	// 	validateQueryV2(query, currentMFields, currentSFields);
 
 	// 	const data = kind === "course_offerings" ? model.getSections() : model.getRooms();
 	// 	const results = executeQueryV2(query, data, kind, currentMFields, currentSFields);
 
+
 	// 	if (results.length > 5000) {
 	// 		throw new Error("Query would return more than 5000 results");
 	// 	}
 
+
 	// 	return results;
 	// }
+
 
 	// // ... (Helper logic for projectRowV2 and evaluateFilterV2 similar to V1 but kind-aware) ...
 	// function validateMComparison(type: string, obj: any) {
@@ -1278,7 +1294,9 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 		throw new Error("Missing COLUMNS or empty array");
 	// 	}
 
+
 	// 	const allValidKeys = [...mfs, ...sfs];
+
 
 	// 	// 1. Validate WHERE Deeply (Ensures no mixing of dataset fields and correct types)
 	// 	validateFilterV2(query.WHERE, mfs, sfs);
@@ -1296,8 +1314,10 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 			throw new Error("Missing APPLY in TRANSFORMATIONS");
 	// 		}
 
+
 	// 		const groupKeys = query.TRANSFORMATIONS.GROUP;
 	// 		const applyKeys = new Set<string>();
+
 
 	// 		// Validate GROUP keys
 	// 		for (const key of groupKeys) {
@@ -1310,10 +1330,12 @@ export async function createApp(config: AppConfig): Promise<Application> {
 
 	// 			const applyKey = Object.keys(rule)[0];
 
+
 	// 			// Apply keys cannot have underscores and must be unique
 	// 			if (applyKey.includes("_")) throw new Error("applykey cannot contain underscores");
 	// 			if (applyKeys.has(applyKey)) throw new Error(`Duplicate applykey found: ${applyKey}`);
 	// 			applyKeys.add(applyKey);
+
 
 	// 			const tokenObj = rule[applyKey];
 	// 			if (typeof tokenObj !== "object" || Object.keys(tokenObj).length !== 1)
@@ -1325,11 +1347,13 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 			if (!["MAX", "MIN", "AVG", "COUNT", "SUM"].includes(token)) throw new Error(`Invalid APPLY token: ${token}`);
 	// 			if (!allValidKeys.includes(targetKey)) throw new Error(`Invalid target key in APPLY: ${targetKey}`);
 
+
 	// 			// MAX, MIN, AVG, SUM can ONLY target mfields (numbers)
 	// 			if (["MAX", "MIN", "AVG", "SUM"].includes(token)) {
 	// 				if (!mfs.includes(targetKey)) throw new Error(`${token} must target a numeric field (mfield)`);
 	// 			}
 	// 		}
+
 
 	// 		// All columns must be in GROUP or APPLY
 	// 		for (const col of query.OPTIONS.COLUMNS) {
@@ -1394,6 +1418,7 @@ export async function createApp(config: AppConfig): Promise<Application> {
 	// 		if (typeof value[field] !== "number") throw new Error(`${key} value must be a number`);
 	// 		return;
 	// 	}
+
 
 	// 	if (key === "IS") {
 	// 		if (typeof value !== "object" || Object.keys(value).length !== 1)
