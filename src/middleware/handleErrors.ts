@@ -20,6 +20,6 @@ export function handleError(err: any, res: Response) {
 			limit: 5000,
 		});
 	} else {
-		res.status(BAD_REQUEST).send({error: "Invalid query", message: err.message});
+		res.status(BAD_REQUEST).send({ error: "Invalid query", message: err.message });
 	}
 }
