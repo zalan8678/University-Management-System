@@ -341,4 +341,19 @@ export interface DatasetF {
 	};
 	message: string;
 }
+
+// ai gen'd
+let modelInstance: Model | null = null;
+
+export async function initModel(datadir: string): Promise<void> {
+	modelInstance = await Model.readModel(datadir);
+}
+
+export function getModel(): Model {
+	if (!modelInstance) {
+		throw new Error("Model not initialized");
+	}
+	return modelInstance;
+}
+
 export default Model;
