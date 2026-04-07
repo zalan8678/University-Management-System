@@ -3,13 +3,13 @@
 We chose Search to be our graded area. This is because Search is straightforward to refactor.
 ## C3 Questions
 1. How will services access repositories?
-   Direct imports: service modules import repository modules directly
+   Direct imports: service modules import repository modules directly. We chose this because it is simple to understand. However, it can make future expansion harder since it requires changing more import statements.
 2. How will you structure validation?
-   Middleware-first validators: validation is composed as reusable middleware functions
+   Middleware-first validators: validation is composed as reusable middleware functions. We chose this because it allows for easier expansion for the future. However, this requires many imports that may change over time.
 3. How will you represent domain errors?
-   Custom Error subclasses: throw typed errors (e.g. NotFoundError, ValidationError, TooManyResultsError); callers use try/catch
+   Custom Error subclasses: throw typed errors (e.g. NotFoundError, ValidationError, TooManyResultsError); callers use try/catch. We chose this because it is easier to determine the type of error an error is. However, every new error requires a different class, requiring more work to get started with a new error type.
 4. How will you organize your modules?
-   Per-layer: all controllers together, all services together, all repositories together
+   Per-layer: all controllers together, all services together, all repositories together. We chose this to debug areas by group. However, new functionality require changes in multiple areas so it may be clunky to expand on.
 ## Diagram of Request Flow
 Client Request
 ↓
