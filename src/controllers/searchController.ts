@@ -2,6 +2,7 @@
 
 import { Request, Response } from "express";
 import { searchService } from "../services/searchService";
+import { handleError } from "../middleware/handleErrors";
 
 export async function searchController(req: Request, res: Response) {
 	const { kind, query } = req.body ?? {};
@@ -10,14 +11,6 @@ export async function searchController(req: Request, res: Response) {
 		const results = await searchService(kind, query);
 		res.status(200).send(results);
 	} catch (err: any) {
-		if (err.message.includes("5000")) {
-			res.status(413).send({
-				error: "Too many results",
-				message: "Query would return more than 5000 results",
-				limit: 5000,
-			});
-		} else {
-			res.status(400).send({ error: "Invalid query", message: err.message });
-		}
+		handleError(err, res);
 	}
 }
