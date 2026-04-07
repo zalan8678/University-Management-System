@@ -1,5 +1,6 @@
 import { Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { TooManyResultsError } from "./errors";
 const {
 	OK, // OK, 200
 	// Other common codes are:
@@ -13,7 +14,7 @@ const {
 } = StatusCodes;
 
 export function handleError(err: any, res: Response) {
-	if (err.message.includes("5000")) {
+	if (err instanceof TooManyResultsError) {
 		res.status(REQUEST_TOO_LONG).send({
 			error: "Too many results",
 			message: "Query would return more than 5000 results",
