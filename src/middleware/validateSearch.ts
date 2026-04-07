@@ -17,7 +17,7 @@ export function validateSearch(req: Request, res: Response, next: NextFunction) 
 
 	if (Object.keys(fields).length > 0) {
 		res.status(422).send({ error: "Validation failed", fields });
-        return;
+		return;
 	}
 
 	next();
