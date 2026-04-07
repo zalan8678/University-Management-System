@@ -1,19 +1,10 @@
 // route -> 2. CONTROLLER -> service
 
 import { Request, Response } from "express";
-import { validateSearchBasic } from "../middleware/validateSearch";
 import { searchService } from "../services/searchService";
 
 export async function searchController(req: Request, res: Response) {
 	const { kind, query } = req.body ?? {};
-	const validationBasic = validateSearchBasic(req.body);
-	if (!validationBasic.valid) {
-		res.status(422).send({
-			error: "Validation failed",
-			fields: validationBasic.fields,
-		});
-		return;
-	}
 
 	try {
 		const results = await searchService(kind, query);

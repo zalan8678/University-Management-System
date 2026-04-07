@@ -1,5 +1,7 @@
-export function validateSearchBasic(body: any) {
-	const { kind, query } = body ?? {};
+import { Request, Response, NextFunction } from "express";
+
+export function validateSearch(req: Request, res: Response, next: NextFunction) {
+	const { kind, query } = req.body ?? {};
 
 	const fields: Record<string, string> = {};
 
@@ -14,8 +16,9 @@ export function validateSearchBasic(body: any) {
 	}
 
 	if (Object.keys(fields).length > 0) {
-		return { valid: false, fields };
+		res.status(422).send({ error: "Validation failed", fields });
+        return;
 	}
 
-	return { valid: true, kind, query };
+	next();
 }
